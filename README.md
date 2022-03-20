@@ -1,4 +1,5 @@
 # Dactyl Manuform with bluetooth via. ESP32
+
 The dactly manuform keyboard - now with easy bluetooth
 
 This is by no means a complete, easy-to-replicate project. QMK currently does not support the bluetooth-capable ESP32 microcontroller, due to an allegedly "easier" bluetooth implimentation using a pro micro and a bluetooth breakout board. Doesn't sound easier to me, though. The Arduino code in this repo is just a stop-gap until that gets implimented on the *far* more robust QMK firmware.
@@ -9,6 +10,7 @@ I wanted a wireless solution, and preferably one that's a bit more flexible. Thi
 If you've seen the dactyl before and you're on the fence, I'd say pull the trigger. Learning the layout is worth the trouble, and with some nice clicky blues this is a great keyboard.
 
 ## Broad board overview 
+
 Each half uses an ESP32 to handle all the thinking, and both halves independantly send their keystrokes to a connected device over bluetooth. 
 Notably, I've built in the option for inter-keyboard communication and sending keystrokes only from a master half. This would let you use a modifier on one half to access a layer on the opposing half, which some people like. 
 For my usecase, this isn't necessary and I've repurposed the communication wire to share a charging current between the two keyboards - i.e. if one half is plugged in and charging, and the other half is connected to the first, it will also charge. 
