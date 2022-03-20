@@ -4,8 +4,8 @@ The dactly manuform keyboard - now with easy bluetooth
 
 This is by no means a complete, easy-to-replicate project. QMK currently does not support the bluetooth-capable ESP32 microcontroller, due to an allegedly "easier" bluetooth implimentation using a pro micro and a bluetooth breakout board. Doesn't sound easier to me, though. The Arduino code in this repo is just a stop-gap until that gets implimented on the *far* more robust QMK firmware.
 
-The [https://github.com/abstracthat/dactyl-manuform#:~:text=README.md-,The%20Dactyl%2DManuForm%20Keyboard,just%20drop%20to%20the%20floor.](Dactyl Manuform) is a great split keyboard, with a pretty non-standard form. Most pertinently, it's a split keyboard, typically with the two halves having their own microcontrollers that communicate over a TRRS connection, or something similar. 
-I wanted a wireless solution, and preferably one that's a bit more flexible. This is the result, and is thanks to the excellent work in getting the ESP32 HID mode running by [https://github.com/T-vK/ESP32-BLE-Keyboard](these guys). 
+The [Dactyl Manuform](https://github.com/abstracthat/dactyl-manuform#:~:text=README.md-,The%20Dactyl%2DManuForm%20Keyboard,just%20drop%20to%20the%20floor.)  is a great split keyboard, with a pretty non-standard form. Most pertinently, it's a split keyboard, typically with the two halves having their own microcontrollers that communicate over a TRRS connection, or something similar. 
+I wanted a wireless solution, and preferably one that's a bit more flexible. This is the result, and is thanks to the excellent work in getting the ESP32 HID mode running by [these guys](https://github.com/T-vK/ESP32-BLE-Keyboard). 
 
 If you've seen the dactyl before and you're on the fence, I'd say pull the trigger. Learning the layout is worth the trouble, and with some nice clicky blues this is a great keyboard.
 
