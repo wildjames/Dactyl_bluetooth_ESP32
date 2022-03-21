@@ -1,3 +1,5 @@
+// This is NOT the actual key layout! This is just a key, to the key layout. 
+#include "KeyLayout.h"
 
 
 // Layers can be accessed by holding the MOD key, index defined below
@@ -18,8 +20,8 @@ int keymap[] = {
   // so this array needs to be NKEYS * NLAYERS long.
   
   // Layer 0
-   63,   61,   49,   48,  103, 
-   26,   16,    0,   25,  104, 
+   63,   61,   49,   48,   38, 
+   26,   16,    0,   25,   39, 
    27,   22,   18,   23,   51, 
    28,    4,    3,    2,   50, 
    29,   17,    5,   21,   -1, 
@@ -29,10 +31,10 @@ int keymap[] = {
   // Layer 1
   107,   -1,   70,   -1,   -1, 
    71,   -1,   -1,   -1,   -1, 
-   72,   -1,   58,   -1,   -1, 
+   72,   66,   58,   -1,   -1, 
    73,   56,   57,   -1,   -1, 
-   74,   -1,   59,   -1,   -1, 
-   75,   66,   67,   -1,   -1, 
+   74,   67,   59,   -1,   -1, 
+   75,   -1,   -1,   -1,   -1, 
    -1,   -1,   -1,   -1,   -1, 
 };
 

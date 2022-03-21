@@ -2,23 +2,23 @@
 // [DONE] recognise keypresses and releases consistently
 // [DONE] make Bluetooth keyboard work
 // [DONE] Hook keypresses into bluetooth keyboard
-// [DONE] Make a keymap 
+// [DONE] Make a keymap
 // [DONE] impliment layers to the keyboard
 // [DONE] communication between two ESP32 down the jack
 // [DONE] make the left keyboard pass on keystrokes from the right one
-// [DONE] The two halves need to communicate when they are plugged 
-//   - send a keep-alive message every second or so, if it's missed we're no longer 
+// [DONE] The two halves need to communicate when they are plugged
+//   - send a keep-alive message every second or so, if it's missed we're no longer
 //     connected.~
 //   - Code for this is implemented, but I don't really know what to do between the boards.
 //     Might have been better as a way to share power delivery? dunno. Since layers are localised
-//     to each board anyway, the modifier states don't need to be shared. Unsure if there 
+//     to each board anyway, the modifier states don't need to be shared. Unsure if there
 //     might be a latency improvement if only one BT device is sending keys? not sure how to test. I doubt it would be significant.
 //
 // [DONE] report battery level of the keyboard halves
-// The layout needs optimising. 
-// [DONE] Remove game mode, I dont need it. 
+// The layout needs optimising.
+// [DONE] Remove game mode, I dont need it.
 //   - I made it an optional toggle in the config files
-// [IN PROGRESS]Rewire the connecting cable so that the two halves can share a charging current. 
+// [DONE]Rewire the connecting cable so that the two halves can share a charging current.
 //   - Check if the cable is thick enough to carry 500mA (YES)
 //   - Make this so that it connects the *chargers*, not the *batteries*. If two batteries
 //     of different voltage are connected, they'll equalise very quickly and probably saturate their max current
@@ -29,17 +29,14 @@
 #define USE_NIMBLE
 #include <BleKeyboard.h>
 
-// This is NOT the actual key layout! This is just a key, to the key layout. 
-#include "KeyLayout.h"
 
+//******************************************************************
 
-
-******************************************************************
 // board-specific info in a header file. Make sure to change this!
 #include "BoardConfig_L.h"
 //#include "BoardConfig_R.h"
-******************************************************************
 
+//******************************************************************
 
 
 // For keeping GPIO high during deep sleep
@@ -51,7 +48,7 @@
 int keyStates[NKEYS] = {0};
 int pKeyStates[NKEYS] = {0};
 
-// For communicating with the other half - sends this message first 
+// For communicating with the other half - sends this message first
 // to denote a press or release
 int press_flag = B00001111;
 int release_flag = B11110000;
@@ -109,10 +106,10 @@ void setup() {
   digitalWrite(LEDPin, led_state);
 
   bleKB.begin();
-  
+
   last_keep_alive_check = millis();
   last_keypress = millis();
-  
+
   update_battery_level();
 
   last_loop = millis();
@@ -139,19 +136,19 @@ void loop() {
         is_connected = false;
       }
     }
-      
+
     // Wait until the next poll loop if necessary (it should be)
     while (millis() - last_loop < poll_time);
-    
+
   } else {
     if (DEBUG) {Serial.println("Not connected to bluetooth...");}
 
     if (led_state == HIGH) {led_state = LOW;} else {led_state = HIGH;}
     digitalWrite(LEDPin, led_state);
-    
+
     // See what my other half is doing
     if (split_keeb_communication) {parse_other_half();}
-    
+
     // and wait for a while. Can't sleep, or the bluetooth radio turns off.
     while (millis() - last_loop < disconnected_wait);
 
@@ -159,7 +156,7 @@ void loop() {
     if (millis() - last_keypress > disconnected_deepsleep) {
       go_to_sleep();
     }
-  
+
   }
 
   // Do I need to update the battery?
@@ -171,7 +168,7 @@ void loop() {
   if (millis() - last_keypress > deepsleep_wait) {
     go_to_sleep();
   }
-  
+
   last_loop = millis();
 }
 
@@ -209,11 +206,11 @@ void poll_pins() {
     digitalWrite(rowPins[i], HIGH);
     for (int j=0; j<NCOLS; j++) {
       bool val = digitalRead(colPins[j]);
-      
+
       // Store the current and previous key states
       pKeyStates[k] = keyStates[k];
       keyStates[k] = val;
-      
+
       k++;
     }
     digitalWrite(rowPins[i], LOW);
@@ -236,16 +233,16 @@ void parse_alt() {
     if (keyStates[typing_toggle]) {
       Serial.println("\nSWAPPING TO TYPING MODE\n");
       is_alt = false;
-      
+
       // release all keys
       bleKB.releaseAll();
       // To prevent the toggle key firing its key on the new layer, set its pState to True
       pKeyStates[typing_toggle] = 1;
-      
+
       return;
     }
   }
-  
+
   send_keypress(alt_keymap);
 }
 
@@ -254,13 +251,13 @@ void parse_typing() {
     if (keyStates[alt_toggle]) {
       Serial.println("\nSWAPPING TO alt MODE\n");
       is_alt = true;
-      
+
       // release all keys
       bleKB.releaseAll();
       return;
     }
   }
-  
+
   send_keypress(keymap);
 }
 
@@ -268,7 +265,7 @@ void send_keypress(int keys[]) {
   int pressed = 0;
   // Handle layering
   if (keyStates[MODKEY0] and (not is_alt)) {pressed += NKEYS;}
-  
+
   for (int i=0; i<NKEYS; i++) {
     if (keyStates[i] and (not pKeyStates[i])) {
       pressed += i;
@@ -287,7 +284,7 @@ void send_keypress(int keys[]) {
         }
       } else {
         last_keypress = millis();
-        
+
         if (DEBUG) {
           Serial.print("I detected the keypress at index ");
           Serial.println(pressed);
@@ -309,7 +306,7 @@ void send_keypress(int keys[]) {
           Serial2.write(letters[letterIndex]);
         }
       }
-      
+
       // Subtract off again the keypress, so we can handle NKRO
       pressed -= i;
     }
@@ -317,7 +314,7 @@ void send_keypress(int keys[]) {
     // Key is released
     if ((not keyStates[i]) and pKeyStates[i]) {
       pressed += i;
-      
+
       int letterIndex = keys[pressed];
       if (DEBUG) {
         Serial.print("I detected the keypress at index ");
@@ -361,16 +358,16 @@ void parse_other_half() {
         // Set flag and timer.
         is_connected = true;
         last_keep_alive_time = millis();
-        
+
       } else if ((is_press == press_flag) or (is_press == release_flag)) {
         Serial.print("I got the message ");
         Serial.print(is_press);
         Serial.println(" so I expect a second message. Waiting for that now...");
-        
+
         // Get the second half of the message
         while (not Serial2.available());
         char recv = Serial2.read();
-        
+
         if (is_press == press_flag) {
           if (not DUMMY) {bleKB.press(recv);}
         } else if (is_press == release_flag) {
