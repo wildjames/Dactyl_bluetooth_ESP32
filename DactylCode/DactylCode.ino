@@ -13,7 +13,6 @@
 //     Might have been better as a way to share power delivery? dunno. Since layers are localised
 //     to each board anyway, the modifier states don't need to be shared. Unsure if there
 //     might be a latency improvement if only one BT device is sending keys? not sure how to test. I doubt it would be significant.
-//
 // [DONE] report battery level of the keyboard halves
 // The layout needs optimising.
 // [DONE] Remove game mode, I dont need it.
@@ -24,7 +23,11 @@
 //     of different voltage are connected, they'll equalise very quickly and probably saturate their max current
 //     which could start a fire!
 //   - The charging boards to provide input pads - could likely solder them together?
+// [DONE] dim leds with some strobing
 
+// [TODO] Add  double tap to lock the modifier 
+// [TODO] double tap to lock shift to caps? 
+// [TODO] light sleep between loops, if theres time
 
 #define USE_NIMBLE
 #include <BleKeyboard.h>
@@ -33,8 +36,8 @@
 //******************************************************************
 
 // board-specific info in a header file. Make sure to change this!
-#include "BoardConfig_L.h"
-//#include "BoardConfig_R.h"
+//#include "BoardConfig_L.h"
+#include "BoardConfig_R.h"
 
 //******************************************************************
 
@@ -64,15 +67,22 @@ int last_keep_alive_time = 0;
 // Battery monitor timing
 int last_battery_update = 0;
 
+// Double-tappable modifier key
+int last_mod_tap = 0;
+bool locked_modkey = false;
+
 // For seeing if this loop is done yet.
 int last_loop;
 
-// Move keys over one column to the left for alt keymap
+// Use an alternate keymap
 bool is_alt = false;
 
+// Time of the last keypress
 int last_keypress;
 
+// Current LED state.
 int led_state = HIGH;
+int duty_cycle;
 
 
 void setup() {
@@ -102,11 +112,14 @@ void setup() {
     pinMode(colPins[i], INPUT_PULLDOWN);
   }
 
-  pinMode(LEDPin, OUTPUT);
-  digitalWrite(LEDPin, led_state);
+  // Set up the LED PWM handler
+  ledcSetup(ledChannel, frequency, resolution);
+  ledcAttachPin(LEDPin, ledChannel);
+  duty_cycle = max_duty_cycle;
 
   bleKB.begin();
 
+  last_mod_tap = millis();
   last_keep_alive_check = millis();
   last_keypress = millis();
 
@@ -125,8 +138,14 @@ void loop() {
     // See what my other half is doing
     if (split_keeb_communication) {parse_other_half();}
 
+    // Set the LED brightness.
     led_state = HIGH;
-    digitalWrite(LEDPin, led_state);
+    if (locked_modkey) {
+      duty_cycle = max_duty_cycle;
+    } else {
+      duty_cycle = max_duty_cycle / 2;
+    }
+    ledcWrite(ledChannel, led_state * duty_cycle);
 
     if (split_keeb_communication) {
       if (millis() - last_keep_alive_check > keep_alive_delay) {
@@ -143,8 +162,9 @@ void loop() {
   } else {
     if (DEBUG) {Serial.println("Not connected to bluetooth...");}
 
+    // Flash the LED
     if (led_state == HIGH) {led_state = LOW;} else {led_state = HIGH;}
-    digitalWrite(LEDPin, led_state);
+    ledcWrite(ledChannel, led_state * max_duty_cycle);
 
     // See what my other half is doing
     if (split_keeb_communication) {parse_other_half();}
@@ -182,15 +202,15 @@ void update_battery_level() {
   if (battery_percentage > 100.0) {battery_percentage = 100.0;}
   if (battery_percentage < 0.0) {battery_percentage = 0.0;}
 
-  if (DEBUG) {
-    Serial.print("My battery pin measured ");
-    Serial.println(battery_measurement);
-    Serial.print("Which corresponds to a voltage of ");
-    Serial.println(battery_voltage);
-    Serial.print("And this is ");
-    Serial.print(battery_percentage);
-    Serial.println("% full.");
-  }
+//  if (DEBUG) {
+//    Serial.print("My battery pin measured ");
+//    Serial.println(battery_measurement);
+//    Serial.print("Which corresponds to a voltage of ");
+//    Serial.println(battery_voltage);
+//    Serial.print("And this is ");
+//    Serial.print(battery_percentage);
+//    Serial.println("% full.");
+//  }
 
   bleKB.setBatteryLevel(battery_percentage);
   last_battery_update = millis();
@@ -215,6 +235,28 @@ void poll_pins() {
     }
     digitalWrite(rowPins[i], LOW);
     delayMicroseconds(key_delay_us);
+  }
+
+
+  // Remember what time we last pressed the modifier key
+  if (pKeyStates[MODKEY0] and (not keyStates[MODKEY0])) {
+    if (DEBUG) {
+      Serial.println("Pressed the modifier key!");
+      Serial.print("Time since last tap: ");
+      Serial.println(millis() - last_mod_tap);
+    }
+    // But first check if we got a double tap.
+    if ((millis() - last_mod_tap) < double_tap_interval) {
+      if (DEBUG) {
+        Serial.println("Toggling modifier lock");
+      }
+      locked_modkey = !locked_modkey;
+      // Set the last tap to be somewhat in the past, so the next hit doesnt also trigger it
+      last_mod_tap = last_mod_tap - double_tap_interval;
+    } else {
+      // Then, save the current tap time. 
+      last_mod_tap = millis();
+    }
   }
 }
 
@@ -261,10 +303,18 @@ void parse_typing() {
   send_keypress(keymap);
 }
 
+
+void press_key_at_index(int letterIndex) {
+  
+}
+
+
 void send_keypress(int keys[]) {
   int pressed = 0;
   // Handle layering
-  if (keyStates[MODKEY0] and (not is_alt)) {pressed += NKEYS;}
+  if (keyStates[MODKEY0] or locked_modkey) {
+    pressed += NKEYS;
+  }
 
   for (int i=0; i<NKEYS; i++) {
     if (keyStates[i] and (not pKeyStates[i])) {
@@ -273,13 +323,19 @@ void send_keypress(int keys[]) {
 
       // Skip NC keys
       if (letterIndex == -1) {
-        if (DEBUG) {Serial.println("Got a no-connect key");}
+        if (DEBUG) {
+          Serial.println("Got a no-connect key");
+        }
       } else if (letterIndex < -1) {
         // Handling Media keys
         letterIndex *= -1; // Make it positive
-        if (not DUMMY) {bleKB.write(media_keys[letterIndex]);}
+        
+        if (not DUMMY) {
+          bleKB.write(media_keys[letterIndex]);
+        }
+        
         if (DEBUG) {
-          Serial.print("Detected a keypress at ");
+          Serial.print("Detected a keypress at Media key, index: ");
           Serial.println(letterIndex);
         }
       } else {
@@ -298,7 +354,9 @@ void send_keypress(int keys[]) {
 
         if (is_master or (not is_connected)) {
           Serial.println(letters[letterIndex]);
-          if (not DUMMY) {bleKB.press(letters[letterIndex]);}
+          if (not DUMMY) {
+            bleKB.press(letters[letterIndex]);
+          }
         } else if (split_keeb_communication) {
           Serial.print("Sending keystroke to partner: ");
           Serial.println(letters[letterIndex]);
@@ -317,14 +375,42 @@ void send_keypress(int keys[]) {
 
       int letterIndex = keys[pressed];
       if (DEBUG) {
-        Serial.print("I detected the keypress at index ");
+        Serial.print("I detected a release at index ");
         Serial.println(pressed);
         Serial.print("This corresponds to the keystroke: ");
         Serial.println(letters[letterIndex], HEX);
       }
 
       if (is_master or (not is_connected)) {
-        if (not DUMMY) {bleKB.release(letters[letterIndex]);}
+        if (not DUMMY) {
+          bleKB.release(letters[letterIndex]); 
+          
+          int letterIndex_alt = -1;
+          // also release the layer below me or above me
+          if (keyStates[MODKEY0] or locked_modkey) {
+            letterIndex_alt = keys[pressed-NKEYS];
+          } else {
+            letterIndex_alt = keys[pressed+NKEYS];
+          }
+          
+          if (letterIndex_alt != -1) {
+            if (DEBUG) {
+              Serial.print("Also releasing key at index: ");
+              Serial.println(letterIndex_alt);
+            }
+            bleKB.release(letters[letterIndex_alt]);
+          } else if (letterIndex_alt < -1) {
+            // Handling Media keys
+            letterIndex_alt *= -1; // Make it positive
+            
+            bleKB.release(media_keys[letterIndex_alt]);
+            
+            if (DEBUG) {
+              Serial.print("Also releasing Media key, index: ");
+              Serial.println(letterIndex);
+            }
+          }
+        }
       } else if (split_keeb_communication) {
         Serial2.write(release_flag);
         Serial2.print(letters[letterIndex]);

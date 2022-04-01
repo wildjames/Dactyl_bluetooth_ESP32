@@ -56,10 +56,19 @@ float battery_min_voltage = 3.2;
 float battery_max_voltage = 4.2;
 
 
+// LED brightness settings
+int frequency = 5000;
+const int ledChannel = 0;
+const int resolution = 8;
+const int max_duty_cycle = 200;
+
 // TIMINGS!
 
 // 125Hz is generally standard. ESP32 could push higher though. 
 int poll_time = 5; // ms
+
+// you can double-tap the modifier to lock it. 
+int double_tap_interval = 1000; // ms
 
 // When we're disconnected, we can sit on our hands for a while
 int disconnected_wait = 500; // ms
