@@ -50,6 +50,7 @@
 // For keeping GPIO high during deep sleep
 #include "soc/rtc_cntl_reg.h"
 #include "soc/rtc.h"
+#include "driver/gpio.h"
 #include "driver/rtc_io.h"
 
 // Tracks the keys.
@@ -102,7 +103,28 @@ int led_state = HIGH;
 int duty_cycle;
 
 
+void release_sleep_matrix_config() {
+  gpio_deep_sleep_hold_dis();
+
+  for (int i = 0; i < NROWS; i++) {
+    gpio_hold_dis((gpio_num_t)rowPins[i]);
+    if (rtc_gpio_is_valid_gpio((gpio_num_t)rowPins[i])) {
+      rtc_gpio_deinit((gpio_num_t)rowPins[i]);
+    }
+  }
+
+  for (int i = 0; i < NWAKE; i++) {
+    gpio_hold_dis((gpio_num_t)wakePins[i]);
+    if (rtc_gpio_is_valid_gpio((gpio_num_t)wakePins[i])) {
+      rtc_gpio_deinit((gpio_num_t)wakePins[i]);
+    }
+  }
+}
+
+
 void setup() {
+  release_sleep_matrix_config();
+
   if (DEBUG) {
     Serial.begin(115200);
     delay(1000);
@@ -598,18 +620,20 @@ void go_to_sleep() {
     Serial.println(buttonPinMask);
   }
 
-//  // Keep the rows HIGH even during sleep
-//  for (int i=0; i < NROWS; i++) {
-//    digitalWrite(rowPins[i], HIGH);
-//    int resp = gpio_hold_en((gpio_num_t)rowPins[i]);
-//    if (DEBUG) {
-//      Serial.print("Holding pin ");
-//      Serial.print(rowPins[i]);
-//      Serial.print(" was success? ");
-//      Serial.println(resp == ESP_OK);
-//    }
-//  }
-//  gpio_deep_sleep_hold_en();
+  // Hold every row high so a pressed key can drive one of the selected wake columns high.
+  for (int i = 0; i < NROWS; i++) {
+    digitalWrite(rowPins[i], HIGH);
+    gpio_hold_en((gpio_num_t)rowPins[i]);
+  }
+  gpio_deep_sleep_hold_en();
+
+  for (int i = 0; i < NWAKE; i++) {
+    gpio_num_t wake_pin = (gpio_num_t)wakePins[i];
+    rtc_gpio_init(wake_pin);
+    rtc_gpio_set_direction(wake_pin, RTC_GPIO_MODE_INPUT_ONLY);
+    rtc_gpio_pullup_dis(wake_pin);
+    rtc_gpio_pulldown_en(wake_pin);
+  }
 
   esp_sleep_enable_ext1_wakeup(buttonPinMask, ESP_EXT1_WAKEUP_ANY_HIGH);
   Serial.println("Going to sleep...");

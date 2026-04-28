@@ -46,9 +46,12 @@ int NROWS = 5;
 // For waking from deepsleep,
 // you *could* have these pins listen for a HIGH signal to wake the controller.
 // Requires using RTC pins for rows: {0, 2, 4, 12-15, 25, 26, 27, 32-39}
-// CAUTION: UNTESTED AND UNUSED. SEE END OF MAIN CODE.
-int wakePins[] = {};
-int NWAKE = 0;
+// Selected wake columns:
+// GPIO27 -> Backspace, Minus, Apostrophe, Right Shift
+// GPIO13 -> 9, O, L, Period, Equals
+// GPIO14 -> 8, I, K, Comma, Asterisk
+int wakePins[] = {27, 13, 14};
+int NWAKE = 3;
 
 // For communicating the battery percentage
 int batteryPin = A13;
@@ -83,7 +86,7 @@ int disconnected_deepsleep = 1000 * 60 * 2; // ms
 int key_delay_us = 10; // MICROseconds!
 
 // how long after the last keystroke before entering deep sleep.
-int deepsleep_wait = 1000 * 60 * 10; // ms
+int deepsleep_wait = 1000 * 60 * 1; // ms
 
 // How long between battery voltage updates. Will report garbage when charging
 int battery_poll_interval = 1000 * 10; // ms
