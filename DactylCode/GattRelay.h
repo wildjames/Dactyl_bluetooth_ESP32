@@ -167,6 +167,7 @@ static bool gatt_client_ready = false;
 class GattClientCallbacks : public NimBLEClientCallbacks {
   void onDisconnect(NimBLEClient* pClient, int reason) override {
     if (DEBUG) { Serial.println("[GATT] Disconnected from master"); }
+    pRemoteKeyChar     = nullptr;
     gatt_client_ready = false;
     is_connected      = false;
   }
@@ -178,8 +179,10 @@ class GattClientCallbacks : public NimBLEClientCallbacks {
 // Blocks until the master is found and connected (retries indefinitely).
 // Returns true once connected; never returns false.
 bool connect_to_master_gatt() {
-  NimBLEDevice::init("");           // Init BLE without HID
-  NimBLEDevice::setPower(ESP_PWR_LVL_P9);
+  if (!NimBLEDevice::isInitialized()) {
+    NimBLEDevice::init("");         // Init BLE without HID
+    NimBLEDevice::setPower(ESP_PWR_LVL_P9);
+  }
 
   NimBLEScan* pScan = NimBLEDevice::getScan();
   pScan->setActiveScan(true);

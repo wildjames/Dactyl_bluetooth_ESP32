@@ -37,8 +37,8 @@
 //******************************************************************
 
 // board-specific info in a header file. Make sure to change this!
-#include "BoardConfig_L.h"
-// #include "BoardConfig_R.h"
+// #include "BoardConfig_L.h"
+#include "BoardConfig_R.h"
 
 // Wireless GATT relay between halves (must come after BoardConfig so that
 // bleKB, DEBUG, is_master, RXD2/TXD2 are already declared).
@@ -174,6 +174,11 @@ void setup() {
 
 void loop() {
   bool master_has_ble_peer = false;
+  bool is_wireless_slave = use_gatt && !is_master;
+
+  if (is_wireless_slave && !is_connected) {
+    connect_to_master_gatt();
+  }
 
   if (use_gatt && is_master) {
     NimBLEServer* server = NimBLEDevice::getServer();
@@ -191,7 +196,6 @@ void loop() {
     }
   }
 
-  bool is_wireless_slave = use_gatt && !is_master;
   bool has_master_ble_link = bleKB.isConnected() || bleKB.isPaired();
   bool can_master_send_keys = has_master_ble_link || master_has_ble_peer;
 
