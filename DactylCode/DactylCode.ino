@@ -24,19 +24,20 @@
 //     which could start a fire!
 //   - The charging boards to provide input pads - could likely solder them together?
 // [DONE] dim leds with some strobing
+// [DONE] Add  double tap to lock the modifier
+// [DONE] double tap to lock shift to caps?
+// [DONE] light sleep between loops, if theres time
 
-// [TODO] Add  double tap to lock the modifier 
-// [TODO] double tap to lock shift to caps? 
-// [TODO] light sleep between loops, if theres time
+// [TODO] Detect if we are plugged in to another half, and dynamically switch to the connected mode
 
-#define USE_NIMBLE
-#include <BleKeyboard.h>
+
+#include <HijelHID_BLEKeyboard.h>
 
 
 //******************************************************************
 
 // board-specific info in a header file. Make sure to change this!
-//#include "BoardConfig_L.h"
+// #include "BoardConfig_L.h"
 #include "BoardConfig_R.h"
 
 //******************************************************************
@@ -70,6 +71,11 @@ int last_battery_update = 0;
 // Double-tappable modifier key
 int last_mod_tap = 0;
 bool locked_modkey = false;
+int last_mod_flash = 0;
+bool mod_flash_high = false;
+
+// Double-tappable shift key (sends caps lock)
+int last_shift_tap = 0;
 
 // For seeing if this loop is done yet.
 int last_loop;
@@ -113,8 +119,7 @@ void setup() {
   }
 
   // Set up the LED PWM handler
-  ledcSetup(ledChannel, frequency, resolution);
-  ledcAttachPin(LEDPin, ledChannel);
+  ledcAttach(LEDPin, frequency, resolution);
   duty_cycle = max_duty_cycle;
 
   bleKB.begin();
@@ -130,7 +135,7 @@ void setup() {
 
 
 void loop() {
-  if (bleKB.isConnected() or is_connected) {
+  if (bleKB.isPaired() or is_connected) {
     // See if I have any changes to my pins
     poll_pins();
     // Handle and keypresses on my side of things
@@ -141,11 +146,15 @@ void loop() {
     // Set the LED brightness.
     led_state = HIGH;
     if (locked_modkey) {
-      duty_cycle = max_duty_cycle;
+      if (millis() - last_mod_flash >= 125) {
+        mod_flash_high = !mod_flash_high;
+        last_mod_flash = millis();
+      }
+      duty_cycle = mod_flash_high ? max_duty_cycle : max_duty_cycle / 2;
     } else {
       duty_cycle = max_duty_cycle / 2;
     }
-    ledcWrite(ledChannel, led_state * duty_cycle);
+    ledcWrite(LEDPin, led_state * duty_cycle);
 
     if (split_keeb_communication) {
       if (millis() - last_keep_alive_check > keep_alive_delay) {
@@ -156,21 +165,27 @@ void loop() {
       }
     }
 
-    // Wait until the next poll loop if necessary (it should be)
-    while (millis() - last_loop < poll_time);
+    // Yield for the remainder of the poll window
+    int remaining_ms = poll_time - (int)(millis() - last_loop);
+    if (remaining_ms > 1) {
+      delay(remaining_ms);
+    }
 
   } else {
     if (DEBUG) {Serial.println("Not connected to bluetooth...");}
 
     // Flash the LED
     if (led_state == HIGH) {led_state = LOW;} else {led_state = HIGH;}
-    ledcWrite(ledChannel, led_state * max_duty_cycle);
+    ledcWrite(LEDPin, led_state * max_duty_cycle);
 
     // See what my other half is doing
     if (split_keeb_communication) {parse_other_half();}
 
-    // and wait for a while. Can't sleep, or the bluetooth radio turns off.
-    while (millis() - last_loop < disconnected_wait);
+    // Yield for the disconnected wait window
+    int remaining_ms = disconnected_wait - (int)(millis() - last_loop);
+    if (remaining_ms > 1) {
+      delay(remaining_ms);
+    }
 
     // Unless it's been a while. Then give up and go to sleep
     if (millis() - last_keypress > disconnected_deepsleep) {
@@ -254,8 +269,19 @@ void poll_pins() {
       // Set the last tap to be somewhat in the past, so the next hit doesnt also trigger it
       last_mod_tap = last_mod_tap - double_tap_interval;
     } else {
-      // Then, save the current tap time. 
+      // Then, save the current tap time.
       last_mod_tap = millis();
+    }
+  }
+
+  // Double-tap the shift key to toggle caps lock
+  if (SHIFTKEY0 >= 0 && pKeyStates[SHIFTKEY0] && (not keyStates[SHIFTKEY0])) {
+    if ((millis() - last_shift_tap) < double_tap_interval) {
+      if (DEBUG) { Serial.println("Toggling caps lock"); }
+      bleKB.tap(KEY_CAPS_LOCK);
+      last_shift_tap = last_shift_tap - double_tap_interval;
+    } else {
+      last_shift_tap = millis();
     }
   }
 }
@@ -305,7 +331,7 @@ void parse_typing() {
 
 
 void press_key_at_index(int letterIndex) {
-  
+
 }
 
 
@@ -329,11 +355,11 @@ void send_keypress(int keys[]) {
       } else if (letterIndex < -1) {
         // Handling Media keys
         letterIndex *= -1; // Make it positive
-        
+
         if (not DUMMY) {
-          bleKB.write(media_keys[letterIndex]);
+          bleKB.tap(media_keys[letterIndex]);
         }
-        
+
         if (DEBUG) {
           Serial.print("Detected a keypress at Media key, index: ");
           Serial.println(letterIndex);
@@ -355,7 +381,7 @@ void send_keypress(int keys[]) {
         if (is_master or (not is_connected)) {
           Serial.println(letters[letterIndex]);
           if (not DUMMY) {
-            bleKB.press(letters[letterIndex]);
+            bleKB.press(letters[letterIndex], letter_mods[letterIndex]);
           }
         } else if (split_keeb_communication) {
           Serial.print("Sending keystroke to partner: ");
@@ -383,8 +409,9 @@ void send_keypress(int keys[]) {
 
       if (is_master or (not is_connected)) {
         if (not DUMMY) {
-          bleKB.release(letters[letterIndex]); 
-          
+          bleKB.release(letters[letterIndex]);
+          if (letter_mods[letterIndex]) { bleKB.release(KEY_LSHIFT); }
+
           int letterIndex_alt = -1;
           // also release the layer below me or above me
           if (keyStates[MODKEY0] or locked_modkey) {
@@ -392,7 +419,7 @@ void send_keypress(int keys[]) {
           } else {
             letterIndex_alt = keys[pressed+NKEYS];
           }
-          
+
           if (letterIndex_alt != -1) {
             if (DEBUG) {
               Serial.print("Also releasing key at index: ");
@@ -402,9 +429,9 @@ void send_keypress(int keys[]) {
           } else if (letterIndex_alt < -1) {
             // Handling Media keys
             letterIndex_alt *= -1; // Make it positive
-            
+
             bleKB.release(media_keys[letterIndex_alt]);
-            
+
             if (DEBUG) {
               Serial.print("Also releasing Media key, index: ");
               Serial.println(letterIndex);
@@ -452,7 +479,7 @@ void parse_other_half() {
 
         // Get the second half of the message
         while (not Serial2.available());
-        char recv = Serial2.read();
+        uint8_t recv = uint8_t(Serial2.read());
 
         if (is_press == press_flag) {
           if (not DUMMY) {bleKB.press(recv);}
@@ -474,10 +501,13 @@ void go_to_sleep() {
   led_state = LOW;
   digitalWrite(LEDPin, led_state);
 
+  // Clear the light-sleep timer wakeup so it doesn't fire during deep sleep
+  esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_TIMER);
+
   // Set which column pins can wake the device
   uint64_t buttonPinMask = 0;
   for (int i=0; i < NWAKE; i++) {
-    buttonPinMask |= (1 << wakePins[i]);
+    buttonPinMask |= (1ULL << wakePins[i]);
   }
   if (DEBUG) {
     Serial.print("Button pin mask is: ");

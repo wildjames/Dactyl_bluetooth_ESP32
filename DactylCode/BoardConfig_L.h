@@ -15,7 +15,7 @@ const bool split_keeb_communication = false;
 const bool is_master = true;
 
 
-BleKeyboard bleKB("TwoBrownFoxes_L", "JWILD", 50);
+HijelHID_BLEKeyboard bleKB("TwoBrownFoxes_L", "JWILD", 50);
 
 
 // PINS!
@@ -35,7 +35,7 @@ int NCOLS = 5;
 int rowPins[] = {27, 32, 22, 23, 19, 16, 17};
 int NROWS = 7;
 
-// For waking from deepsleep, 
+// For waking from deepsleep,
 // you *could* have these pins listen for a HIGH signal to wake the controller.
 // Requires using RTC pins for rows: {0, 2, 4, 12-15, 25, 26, 27, 32-39}
 // CAUTION: UNTESTED AND UNUSED. SEE END OF MAIN CODE.
@@ -58,10 +58,10 @@ const int max_duty_cycle = 200;
 
 // TIMINGS!
 
-// 125Hz is generally standard. ESP32 could push higher though. 
+// 125Hz is generally standard. ESP32 could push higher though.
 int poll_time = 5; // ms
 
-// you can double-tap the modifier to lock it. 
+// you can double-tap the modifier to lock it.
 int double_tap_interval = 1000; // ms
 
 // When we're disconnected, we can sit on our hands for a while
@@ -69,9 +69,9 @@ int disconnected_wait = 500; // ms
 // And if we're disconnected, we can have a lower threshold for going to sleep
 int disconnected_deepsleep = 1000 * 60 * 2; // ms
 
-// How long to wait between setting a row high, and reading the column voltage. 
+// How long to wait between setting a row high, and reading the column voltage.
 // Pushing this too low induces phantom presses in adjacent keyswitch wires.
-// 10us * 35 keys = 0.35ms. 
+// 10us * 35 keys = 0.35ms.
 int key_delay_us = 10; // MICROseconds!
 
 // how long after the last keystroke before entering deep sleep.
