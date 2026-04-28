@@ -5,17 +5,16 @@
 // Keymaps
 #include "KeyLayout_L.h"
 
-const bool DEBUG = false;
+const bool DEBUG = true;
 // In dummy mode, I don't actually send my key presses.
 const bool DUMMY = false;
 
 
-// Split keyboard?
-const bool split_keeb_communication = false;
+// split_keeb_communication is set at runtime by detect_wired_connection() in GattRelay.h.
 const bool is_master = true;
 
 
-HijelHID_BLEKeyboard bleKB("TwoBrownFoxes_L", "JWILD", 50);
+HijelHID_BLEKeyboard bleKB("TwoBrownFoxes", "JWILD", 50);
 
 
 // PINS!

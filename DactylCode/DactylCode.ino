@@ -37,8 +37,12 @@
 //******************************************************************
 
 // board-specific info in a header file. Make sure to change this!
-// #include "BoardConfig_L.h"
-#include "BoardConfig_R.h"
+#include "BoardConfig_L.h"
+// #include "BoardConfig_R.h"
+
+// Wireless GATT relay between halves (must come after BoardConfig so that
+// bleKB, DEBUG, is_master, RXD2/TXD2 are already declared).
+#include "GattRelay.h"
 
 //******************************************************************
 
@@ -52,6 +56,12 @@
 int keyStates[NKEYS] = {0};
 int pKeyStates[NKEYS] = {0};
 
+// Connection-mode flags – set once at boot by detect_wired_connection().
+// split_keeb_communication: true  → wired Serial2 path (original behaviour).
+// use_gatt:                 true  → wireless GATT path (new behaviour).
+bool split_keeb_communication = false;
+bool use_gatt                 = false;
+
 // For communicating with the other half - sends this message first
 // to denote a press or release
 int press_flag = B00001111;
@@ -64,6 +74,7 @@ bool is_connected = false;
 int keep_alive = 50;
 int last_keep_alive_check;
 int last_keep_alive_time = 0;
+uint8_t last_gatt_connected_count = 0;
 
 // Battery monitor timing
 int last_battery_update = 0;
@@ -103,7 +114,18 @@ void setup() {
     }
   }
 
-  if (split_keeb_communication) {Serial2.begin(115200, SERIAL_8N1, RXD2, TXD2);}
+  // ── Connection-mode detection (must run before bleKB.begin) ──────────────
+  // detect_wired_connection() opens Serial2 and exchanges a SYNC/ACK handshake.
+  // If the other half replies within 2 s we are wired; otherwise go wireless.
+  if (detect_wired_connection()) {
+    split_keeb_communication = true;
+    use_gatt                 = false;
+    if (DEBUG) { Serial.println("Connection: WIRED (Serial2)"); }
+  } else {
+    split_keeb_communication = false;
+    use_gatt                 = true;
+    if (DEBUG) { Serial.println("Connection: WIRELESS (GATT)"); }
+  }
 
   if (DEBUG) {Serial.println("Row nums:");}
   for (int i=0; i<NROWS; i++) {
@@ -122,7 +144,23 @@ void setup() {
   ledcAttach(LEDPin, frequency, resolution);
   duty_cycle = max_duty_cycle;
 
-  bleKB.begin();
+  // ── BLE / GATT initialisation ─────────────────────────────────────────────
+  // Wireless slave skips bleKB (no HID advertising needed); it uses NimBLE as
+  // a central in connect_to_master_gatt() instead.
+  if (!(use_gatt && !is_master)) {
+    bleKB.begin();
+  }
+
+  if (use_gatt) {
+    if (is_master) {
+      // Add the relay GATT service on top of the existing HID server.
+      setup_gatt_server();
+    } else {
+      // Scan for and connect to the master's relay service.
+      // is_connected is set to true inside connect_to_master_gatt() on success.
+      connect_to_master_gatt();
+    }
+  }
 
   last_mod_tap = millis();
   last_keep_alive_check = millis();
@@ -135,7 +173,35 @@ void setup() {
 
 
 void loop() {
-  if (bleKB.isPaired() or is_connected) {
+  bool master_has_ble_peer = false;
+
+  if (use_gatt && is_master) {
+    NimBLEServer* server = NimBLEDevice::getServer();
+    if (server != nullptr) {
+      uint8_t connected_count = server->getConnectedCount();
+      master_has_ble_peer = connected_count > 0;
+      NimBLEAdvertising* advertising = server->getAdvertising();
+      if (advertising != nullptr
+          && connected_count > 0
+          && connected_count != last_gatt_connected_count
+          && !advertising->isAdvertising()) {
+        server->startAdvertising();
+      }
+      last_gatt_connected_count = connected_count;
+    }
+  }
+
+  bool is_wireless_slave = use_gatt && !is_master;
+  bool has_master_ble_link = bleKB.isConnected() || bleKB.isPaired();
+  bool can_master_send_keys = has_master_ble_link || master_has_ble_peer;
+
+  // Wireless slave uses its relay link state. Every other mode should stay
+  // active for any live BLE link, even if the HID library's paired/authenticated
+  // bit gets cleared by a non-host reconnect on the shared NimBLE server.
+  bool keyboard_active = is_wireless_slave ? is_connected
+                                           : (can_master_send_keys || is_connected);
+
+  if (keyboard_active) {
     // See if I have any changes to my pins
     poll_pins();
     // Handle and keypresses on my side of things
@@ -227,7 +293,10 @@ void update_battery_level() {
 //    Serial.println("% full.");
 //  }
 
-  bleKB.setBatteryLevel(battery_percentage);
+  // Wireless slave has no HID connection, so there's nowhere to report battery.
+  if (!(use_gatt && !is_master)) {
+    bleKB.setBatteryLevel(battery_percentage);
+  }
   last_battery_update = millis();
 }
 
@@ -356,8 +425,12 @@ void send_keypress(int keys[]) {
         // Handling Media keys
         letterIndex *= -1; // Make it positive
 
-        if (not DUMMY) {
-          bleKB.tap(media_keys[letterIndex]);
+        if (is_master || (!use_gatt && !is_connected)) {
+          if (not DUMMY) {
+            bleKB.tap(media_keys[letterIndex]);
+          }
+        } else if (use_gatt) {
+          gatt_send_media_key(media_keys[letterIndex]);
         }
 
         if (DEBUG) {
@@ -378,11 +451,15 @@ void send_keypress(int keys[]) {
           }
         }
 
-        if (is_master or (not is_connected)) {
+        if (is_master || (!use_gatt && !is_connected)) {
+          // Master always uses bleKB; wired slave falls back to bleKB when disconnected.
           Serial.println(letters[letterIndex]);
           if (not DUMMY) {
             bleKB.press(letters[letterIndex], letter_mods[letterIndex]);
           }
+        } else if (use_gatt) {
+          // Wireless slave: relay keypress to master via GATT.
+          gatt_send_key_press(letters[letterIndex], letter_mods[letterIndex]);
         } else if (split_keeb_communication) {
           Serial.print("Sending keystroke to partner: ");
           Serial.println(letters[letterIndex]);
@@ -407,7 +484,7 @@ void send_keypress(int keys[]) {
         Serial.println(letters[letterIndex], HEX);
       }
 
-      if (is_master or (not is_connected)) {
+      if (is_master || (!use_gatt && !is_connected)) {
         if (not DUMMY) {
           bleKB.release(letters[letterIndex]);
           if (letter_mods[letterIndex]) { bleKB.release(KEY_LSHIFT); }
@@ -438,6 +515,9 @@ void send_keypress(int keys[]) {
             }
           }
         }
+      } else if (use_gatt) {
+        // Wireless slave: relay key release to master via GATT.
+        gatt_send_key_release(letters[letterIndex], letter_mods[letterIndex]);
       } else if (split_keeb_communication) {
         Serial2.write(release_flag);
         Serial2.print(letters[letterIndex]);

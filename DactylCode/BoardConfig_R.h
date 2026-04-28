@@ -20,9 +20,11 @@ const bool DEBUG = false;
 const bool DUMMY = false;
 
 
-// Split keyboard?
-const bool split_keeb_communication = false;
+// split_keeb_communication is set at runtime by detect_wired_connection() in GattRelay.h.
 const bool is_master = false;
+
+// BLE device name of the master half, used by the slave to find it during GATT scan.
+#define MASTER_BLE_NAME "TwoBrownFoxes"
 
 
 HijelHID_BLEKeyboard bleKB("TwoBrownFoxes_R", "JWILD", 50);
