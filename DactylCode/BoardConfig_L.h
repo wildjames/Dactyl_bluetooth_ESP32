@@ -5,13 +5,13 @@
 // Keymaps
 #include "KeyLayout_L.h"
 
-const bool DEBUG = true;
+const bool DEBUG = false;
 // In dummy mode, I don't actually send my key presses.
 const bool DUMMY = false;
 
 
 // split_keeb_communication is set at runtime by detect_wired_connection() in GattRelay.h.
-const bool is_master = true;
+const bool is_primary = true;
 
 
 HijelHID_BLEKeyboard bleKB("TwoBrownFoxes", "JWILD", 50);

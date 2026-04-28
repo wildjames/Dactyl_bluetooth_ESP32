@@ -37,11 +37,11 @@
 //******************************************************************
 
 // board-specific info in a header file. Make sure to change this!
-// #include "BoardConfig_L.h"
-#include "BoardConfig_R.h"
+#include "BoardConfig_L.h"
+// #include "BoardConfig_R.h"
 
 // Wireless GATT relay between halves (must come after BoardConfig so that
-// bleKB, DEBUG, is_master, RXD2/TXD2 are already declared).
+// bleKB, DEBUG, is_primary, RXD2/TXD2 are already declared).
 #include "GattRelay.h"
 
 //******************************************************************
@@ -107,10 +107,10 @@ void setup() {
     Serial.begin(115200);
     delay(1000);
     Serial.print("BOOTED ");
-    if (is_master) {
-      Serial.println("MASTER");
+    if (is_primary) {
+      Serial.println("PRIMARY");
     } else {
-      Serial.println("SLAVE");
+      Serial.println("SECONDARY");
     }
   }
 
@@ -145,20 +145,20 @@ void setup() {
   duty_cycle = max_duty_cycle;
 
   // ── BLE / GATT initialisation ─────────────────────────────────────────────
-  // Wireless slave skips bleKB (no HID advertising needed); it uses NimBLE as
-  // a central in connect_to_master_gatt() instead.
-  if (!(use_gatt && !is_master)) {
+  // Wireless secondary half skips bleKB (no HID advertising needed); it uses
+  // NimBLE as a central in connect_to_primary_gatt() instead.
+  if (!(use_gatt && !is_primary)) {
     bleKB.begin();
   }
 
   if (use_gatt) {
-    if (is_master) {
+    if (is_primary) {
       // Add the relay GATT service on top of the existing HID server.
       setup_gatt_server();
     } else {
-      // Scan for and connect to the master's relay service.
-      // is_connected is set to true inside connect_to_master_gatt() on success.
-      connect_to_master_gatt();
+      // Scan for and connect to the primary half's relay service.
+      // is_connected is set to true inside connect_to_primary_gatt() on success.
+      connect_to_primary_gatt();
     }
   }
 
@@ -173,18 +173,18 @@ void setup() {
 
 
 void loop() {
-  bool master_has_ble_peer = false;
-  bool is_wireless_slave = use_gatt && !is_master;
+  bool primary_has_ble_peer = false;
+  bool is_wireless_secondary = use_gatt && !is_primary;
 
-  if (is_wireless_slave && !is_connected) {
-    connect_to_master_gatt();
+  if (is_wireless_secondary && !is_connected) {
+    connect_to_primary_gatt();
   }
 
-  if (use_gatt && is_master) {
+  if (use_gatt && is_primary) {
     NimBLEServer* server = NimBLEDevice::getServer();
     if (server != nullptr) {
       uint8_t connected_count = server->getConnectedCount();
-      master_has_ble_peer = connected_count > 0;
+      primary_has_ble_peer = connected_count > 0;
       NimBLEAdvertising* advertising = server->getAdvertising();
       if (advertising != nullptr
           && connected_count > 0
@@ -196,14 +196,14 @@ void loop() {
     }
   }
 
-  bool has_master_ble_link = bleKB.isConnected() || bleKB.isPaired();
-  bool can_master_send_keys = has_master_ble_link || master_has_ble_peer;
+  bool has_primary_ble_link = bleKB.isConnected() || bleKB.isPaired();
+  bool can_primary_send_keys = has_primary_ble_link || primary_has_ble_peer;
 
-  // Wireless slave uses its relay link state. Every other mode should stay
+  // Wireless secondary half uses its relay link state. Every other mode should stay
   // active for any live BLE link, even if the HID library's paired/authenticated
   // bit gets cleared by a non-host reconnect on the shared NimBLE server.
-  bool keyboard_active = is_wireless_slave ? is_connected
-                                           : (can_master_send_keys || is_connected);
+  bool keyboard_active = is_wireless_secondary ? is_connected
+                                               : (can_primary_send_keys || is_connected);
 
   if (keyboard_active) {
     // See if I have any changes to my pins
@@ -297,8 +297,8 @@ void update_battery_level() {
 //    Serial.println("% full.");
 //  }
 
-  // Wireless slave has no HID connection, so there's nowhere to report battery.
-  if (!(use_gatt && !is_master)) {
+  // Wireless secondary half has no HID connection, so there's nowhere to report battery.
+  if (!(use_gatt && !is_primary)) {
     bleKB.setBatteryLevel(battery_percentage);
   }
   last_battery_update = millis();
@@ -429,7 +429,7 @@ void send_keypress(int keys[]) {
         // Handling Media keys
         letterIndex *= -1; // Make it positive
 
-        if (is_master || (!use_gatt && !is_connected)) {
+        if (is_primary || (!use_gatt && !is_connected)) {
           if (not DUMMY) {
             bleKB.tap(media_keys[letterIndex]);
           }
@@ -455,14 +455,14 @@ void send_keypress(int keys[]) {
           }
         }
 
-        if (is_master || (!use_gatt && !is_connected)) {
-          // Master always uses bleKB; wired slave falls back to bleKB when disconnected.
+        if (is_primary || (!use_gatt && !is_connected)) {
+          // Primary half always uses bleKB; wired secondary half falls back to bleKB when disconnected.
           Serial.println(letters[letterIndex]);
           if (not DUMMY) {
             bleKB.press(letters[letterIndex], letter_mods[letterIndex]);
           }
         } else if (use_gatt) {
-          // Wireless slave: relay keypress to master via GATT.
+          // Wireless secondary half: relay keypress to primary via GATT.
           gatt_send_key_press(letters[letterIndex], letter_mods[letterIndex]);
         } else if (split_keeb_communication) {
           Serial.print("Sending keystroke to partner: ");
@@ -488,7 +488,7 @@ void send_keypress(int keys[]) {
         Serial.println(letters[letterIndex], HEX);
       }
 
-      if (is_master || (!use_gatt && !is_connected)) {
+      if (is_primary || (!use_gatt && !is_connected)) {
         if (not DUMMY) {
           bleKB.release(letters[letterIndex]);
           if (letter_mods[letterIndex]) { bleKB.release(KEY_LSHIFT); }
@@ -520,7 +520,7 @@ void send_keypress(int keys[]) {
           }
         }
       } else if (use_gatt) {
-        // Wireless slave: relay key release to master via GATT.
+          // Wireless secondary half: relay key release to primary via GATT.
         gatt_send_key_release(letters[letterIndex], letter_mods[letterIndex]);
       } else if (split_keeb_communication) {
         Serial2.write(release_flag);
@@ -534,7 +534,7 @@ void send_keypress(int keys[]) {
 }
 
 void send_keep_alive() {
-  if (is_master) {
+  if (is_primary) {
     Serial.println("Sending keep alive...");
     Serial2.write(keep_alive);
     last_keep_alive_check = millis();
@@ -550,7 +550,7 @@ void parse_other_half() {
 
       // check if it's a keep alive message
       if (is_press == keep_alive) {
-        Serial.println("Got a keep alive message! Still slaved to another half.");
+        Serial.println("Got a keep alive message! Still linked to the other half.");
 
         // Set flag and timer.
         is_connected = true;

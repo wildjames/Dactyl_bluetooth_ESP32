@@ -14,7 +14,7 @@ Note that at time of writing, a bug in the library I use to handle the bluetooth
 ## Broad board overview
 
 Each half uses an ESP32 to handle all the thinking, and both halves independantly send their keystrokes to a connected device over bluetooth.
-Notably, I've built in the option for inter-keyboard communication and sending keystrokes only from a master half. This would let you use a modifier on one half to access a layer on the opposing half, which some people like.
+Notably, I've built in the option for inter-keyboard communication and sending keystrokes only from a primary half. This would let you use a modifier on one half to access a layer on the opposing half, which some people like.
 For my usecase, this isn't necessary and I've repurposed the communication wire to share a charging current between the two keyboards - i.e. if one half is plugged in and charging, and the other half is connected to the first, it will also charge.
 There's also a single alternate layer modifier key built in for each half, but I left it at one additional layer because I can never remember any more than that. Finally, there's a toggle-able layer that can be accessed from a chosen key, for alternate layouts, e.g. a QWERTY/Dvorak toggle key.
 

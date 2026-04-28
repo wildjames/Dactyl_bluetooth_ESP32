@@ -7,10 +7,10 @@
 //   - No cable        → use_gatt = true
 //
 // In GATT mode:
-//   Master  – adds a custom relay service to the NimBLE server that bleKB already owns.
-//             The slave connects and writes key events; the master forwards them via bleKB.
-//   Slave   – does NOT call bleKB.begin().  Instead it initialises NimBLE as a central,
-//             scans for the master's relay service, and writes key events to it.
+//   Primary   - adds a custom relay service to the NimBLE server that bleKB already owns.
+//               The secondary half connects and writes key events; the primary forwards them via bleKB.
+//   Secondary - does NOT call bleKB.begin(). Instead it initialises NimBLE as a central,
+//               scans for the primary half's relay service, and writes key events to it.
 //
 // Requires NimBLE-Arduino 1.4 or later (NimBLEConnInfo parameter in callbacks).
 
@@ -34,13 +34,13 @@
 #define WIRE_DETECT_SYNC          0xAA
 #define WIRE_DETECT_ACK           0x55
 #define WIRE_DETECT_TIMEOUT_MS    2000  // total window (ms)
-#define WIRE_DETECT_PING_INTERVAL 50    // ms between master SYNC pings
+#define WIRE_DETECT_PING_INTERVAL 50    // ms between primary-half SYNC pings
 
-// ── Slave scans for the master by BLE device name ────────────────────────────
-// BoardConfig_R.h defines MASTER_BLE_NAME; provide a fallback for the master
+// ── Secondary half scans for the primary by BLE device name ──────────────────
+// BoardConfig_R.h defines PRIMARY_BLE_NAME; provide a fallback for the primary
 // half (which never uses this define but must compile without it).
-#ifndef MASTER_BLE_NAME
-#define MASTER_BLE_NAME "TwoBrownFoxes"
+#ifndef PRIMARY_BLE_NAME
+#define PRIMARY_BLE_NAME "TwoBrownFoxes"
 #endif
 
 // Forward-declare globals defined later in DactylCode.ino (same compilation unit).
@@ -58,8 +58,8 @@ bool detect_wired_connection() {
 
   unsigned long deadline = millis() + WIRE_DETECT_TIMEOUT_MS;
 
-  if (is_master) {
-    // Master: ping SYNC repeatedly; return true the moment it gets ACK.
+  if (is_primary) {
+    // Primary half: ping SYNC repeatedly; return true the moment it gets ACK.
     while (millis() < deadline) {
       Serial2.write((uint8_t)WIRE_DETECT_SYNC);
       unsigned long ping_end = millis() + WIRE_DETECT_PING_INTERVAL;
@@ -74,7 +74,7 @@ bool detect_wired_connection() {
     return false;
 
   } else {
-    // Slave: wait for SYNC, reply with ACK, return true.
+    // Secondary half: wait for SYNC, reply with ACK, return true.
     while (millis() < deadline) {
       if (Serial2.available() && Serial2.read() == WIRE_DETECT_SYNC) {
         Serial2.write((uint8_t)WIRE_DETECT_ACK);
@@ -88,9 +88,9 @@ bool detect_wired_connection() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Master: GATT relay server
+// Primary half: GATT relay server
 // ─────────────────────────────────────────────────────────────────────────────
-// Callbacks for key-event writes from the slave.
+// Callbacks for key-event writes from the secondary half.
 class KeyEventCallbacks : public NimBLECharacteristicCallbacks {
   void onWrite(NimBLECharacteristic* pChar, NimBLEConnInfo& connInfo) override {
     std::string val = pChar->getValue();
@@ -114,13 +114,13 @@ class KeyEventCallbacks : public NimBLECharacteristicCallbacks {
   }
 };
 
-// Callbacks for slave connect/disconnect events.
+// Connection state is tracked from the secondary-half relay link.
 // NOTE: We do NOT install server callbacks here because bleKB already owns them.
 //       The is_connected flag is updated via the GattServerCallbacks removed
-//       intentionally — instead the master monitors pairing via bleKB's own
-//       callbacks and the slave sets is_connected itself after connecting.
+//       intentionally - instead the primary half monitors pairing via bleKB's own
+//       callbacks and the secondary half sets is_connected itself after connecting.
 
-// Call once during setup(), AFTER bleKB.begin(), when use_gatt && is_master.
+// Call once during setup(), AFTER bleKB.begin(), when use_gatt && is_primary.
 // bleKB.begin() has already initialised the NimBLE stack; we retrieve the
 // existing server and attach the relay service to it.
 // We do NOT touch advertising or server callbacks here — bleKB owns those.
@@ -149,7 +149,7 @@ void setup_gatt_server() {
     NimBLEAdvertising* pAdv = NimBLEDevice::getAdvertising();
     if (pAdv != nullptr) {
       NimBLEAdvertisementData scanResponse;
-      scanResponse.setName(MASTER_BLE_NAME);
+      scanResponse.setName(PRIMARY_BLE_NAME);
       pAdv->setScanResponseData(scanResponse);
       pAdv->start();
     }
@@ -159,26 +159,26 @@ void setup_gatt_server() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Slave: GATT relay client (central role)
+// Secondary half: GATT relay client (central role)
 // ─────────────────────────────────────────────────────────────────────────────
 static NimBLERemoteCharacteristic* pRemoteKeyChar = nullptr;
 static bool gatt_client_ready = false;
 
 class GattClientCallbacks : public NimBLEClientCallbacks {
   void onDisconnect(NimBLEClient* pClient, int reason) override {
-    if (DEBUG) { Serial.println("[GATT] Disconnected from master"); }
+    if (DEBUG) { Serial.println("[GATT] Disconnected from primary half"); }
     pRemoteKeyChar     = nullptr;
     gatt_client_ready = false;
     is_connected      = false;
   }
 };
 
-// Call once during setup() when use_gatt && !is_master.
+// Call once during setup() when use_gatt && !is_primary.
 // bleKB.begin() must NOT have been called; this function initialises NimBLE
 // directly as a central (no HID advertising).
-// Blocks until the master is found and connected (retries indefinitely).
+// Blocks until the primary half is found and connected (retries indefinitely).
 // Returns true once connected; never returns false.
-bool connect_to_master_gatt() {
+bool connect_to_primary_gatt() {
   if (!NimBLEDevice::isInitialized()) {
     NimBLEDevice::init("");         // Init BLE without HID
     NimBLEDevice::setPower(ESP_PWR_LVL_P9);
@@ -190,7 +190,7 @@ bool connect_to_master_gatt() {
   pScan->setWindow(15);
 
   while (true) {
-    if (DEBUG) { Serial.println("[GATT] Scanning for master relay service..."); }
+    if (DEBUG) { Serial.println("[GATT] Scanning for primary relay service..."); }
 
     // start() duration is in milliseconds in NimBLE 2.x (not seconds).
     // Non-blocking; wait on isScanning() for it to finish.
@@ -209,12 +209,12 @@ bool connect_to_master_gatt() {
       const NimBLEAdvertisedDevice* dev = results.getDevice(i);
       // Match on device name — the 128-bit relay UUID is too large to fit in
       // the HID advertisement packet so UUID-based filtering is unreliable.
-      if (dev->getName() != MASTER_BLE_NAME) {
+      if (dev->getName() != PRIMARY_BLE_NAME) {
         continue;
       }
 
       if (DEBUG) {
-        Serial.print("[GATT] Found master: ");
+        Serial.print("[GATT] Found primary half: ");
         Serial.println(dev->getName().c_str());
       }
 
@@ -231,7 +231,7 @@ bool connect_to_master_gatt() {
 
       NimBLERemoteService* pSvc = pClient->getService(RELAY_SERVICE_UUID);
       if (!pSvc) {
-        if (DEBUG) { Serial.println("[GATT] Relay service not found on master; retrying"); }
+        if (DEBUG) { Serial.println("[GATT] Relay service not found on primary half; retrying"); }
         pClient->disconnect();
         NimBLEDevice::deleteClient(pClient);
         break;
@@ -247,11 +247,11 @@ bool connect_to_master_gatt() {
 
       gatt_client_ready = true;
       is_connected      = true;
-      if (DEBUG) { Serial.println("[GATT] Connected to master relay server"); }
+      if (DEBUG) { Serial.println("[GATT] Connected to primary relay server"); }
       return true;
     }
 
-    if (DEBUG) { Serial.println("[GATT] Master not found, retrying scan..."); }
+    if (DEBUG) { Serial.println("[GATT] Primary half not found, retrying scan..."); }
     pScan->clearResults();
     delay(1000);
   }

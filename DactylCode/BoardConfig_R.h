@@ -21,10 +21,10 @@ const bool DUMMY = false;
 
 
 // split_keeb_communication is set at runtime by detect_wired_connection() in GattRelay.h.
-const bool is_master = false;
+const bool is_primary = false;
 
-// BLE device name of the master half, used by the slave to find it during GATT scan.
-#define MASTER_BLE_NAME "TwoBrownFoxes"
+// BLE device name of the primary half, used by the secondary half during GATT scan.
+#define PRIMARY_BLE_NAME "TwoBrownFoxes"
 
 
 HijelHID_BLEKeyboard bleKB("TwoBrownFoxes_R", "JWILD", 50);
