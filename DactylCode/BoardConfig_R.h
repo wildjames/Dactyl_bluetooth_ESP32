@@ -51,7 +51,7 @@ int NWAKE = 0;
 // For communicating the battery percentage
 int batteryPin = A13;
 
-float battery_ref_voltage = 3.7;
+float battery_ref_voltage = 3.3;
 float battery_min_voltage = 3.2;
 float battery_max_voltage = 4.2;
 
