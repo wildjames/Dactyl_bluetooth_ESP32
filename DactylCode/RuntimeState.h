@@ -3,9 +3,11 @@
 #include <Arduino.h>
 #include <stdint.h>
 
+#include "BoardConfig.h"
+
 struct MatrixState {
-  int keyStates[NKEYS] = { 0 };
-  int previousKeyStates[NKEYS] = { 0 };
+  int keyStates[MATRIX_KEY_COUNT] = { 0 };
+  int previousKeyStates[MATRIX_KEY_COUNT] = { 0 };
 };
 
 struct LinkState {
@@ -39,6 +41,8 @@ struct LoopState {
 struct LedState {
   int outputState = HIGH;
   int dutyCycle = 0;
+  unsigned long lastFlashToggle = 0;
+  bool flashHigh = false;
 };
 
 struct RuntimeState {

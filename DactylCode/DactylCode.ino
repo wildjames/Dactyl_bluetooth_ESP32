@@ -42,6 +42,7 @@
 
 #include "RuntimeState.h"
 #include "MatrixScanner.h"
+#include "KeymapResolver.h"
 
 // Wireless GATT relay between halves (must come after BoardConfig so that
 // bleKB and boardConfig are already declared).
@@ -52,6 +53,7 @@
 
 RuntimeState runtimeState = {};
 LinkState& linkState = runtimeState.link;
+KeymapResolver::KeyboardState keyboardState = {};
 
 // For communicating with the other half - sends this message first
 // to denote a press or release
@@ -71,7 +73,27 @@ void update_connected_led();
 void update_disconnected_led();
 void service_split_link();
 void sleep_if_idle();
-void update_modifier_tap_state();
+void dispatch_keymap_result(const KeymapResolver::Result& result);
+void dispatch_keymap_action(const KeymapResolver::Action& action);
+
+KeymapResolver::Config make_keymap_resolver_config() {
+  KeymapResolver::Config config = {};
+  config.modifierKeyIndex = MODKEY0;
+  config.shiftKeyIndex = SHIFTKEY0;
+  config.altToggleKeyIndex = alt_toggle;
+  config.typingToggleKeyIndex = typing_toggle;
+  config.doubleTapIntervalMs = boardConfig.timings.doubleTapIntervalMs;
+  config.primaryKeymap = keymap;
+  config.primaryKeymapLength = sizeof(keymap) / sizeof(keymap[0]);
+  config.alternateKeymap = alt_keymap;
+  config.alternateKeymapLength = sizeof(alt_keymap) / sizeof(alt_keymap[0]);
+  config.keycodes = letters;
+  config.keyModifiers = letter_mods;
+  config.mediaKeys = media_keys;
+  return config;
+}
+
+const KeymapResolver::Config keymapResolverConfig = make_keymap_resolver_config();
 
 
 void initialize_debug_serial() {
@@ -126,9 +148,9 @@ void initialize_transport() {
 
 void initialize_runtime_timers() {
   unsigned long now = millis();
-  runtimeState.modifiers.lastModTap = now;
+  keyboardState.lastModTap = now;
+  keyboardState.lastKeypress = now;
   linkState.lastKeepAliveCheck = now;
-  runtimeState.loop.lastKeypress = now;
   runtimeState.loop.lastLoop = now;
 }
 
@@ -171,12 +193,12 @@ bool keyboard_is_active(bool primary_has_ble_peer) {
 
 void update_connected_led() {
   runtimeState.led.outputState = HIGH;
-  if (runtimeState.modifiers.lockedModKey) {
-    if (millis() - runtimeState.modifiers.lastModFlash >= 125) {
-      runtimeState.modifiers.modFlashHigh = !runtimeState.modifiers.modFlashHigh;
-      runtimeState.modifiers.lastModFlash = millis();
+  if (keyboardState.lockedModKey) {
+    if (millis() - runtimeState.led.lastFlashToggle >= 125) {
+      runtimeState.led.flashHigh = !runtimeState.led.flashHigh;
+      runtimeState.led.lastFlashToggle = millis();
     }
-    runtimeState.led.dutyCycle = runtimeState.modifiers.modFlashHigh
+    runtimeState.led.dutyCycle = runtimeState.led.flashHigh
       ? boardConfig.led.maxDutyCycle
       : boardConfig.led.maxDutyCycle / 2;
   } else {
@@ -209,7 +231,7 @@ void service_split_link() {
 
 
 void sleep_if_idle() {
-  if (millis() - runtimeState.loop.lastKeypress > boardConfig.timings.deepSleepWaitMs) {
+  if (millis() - keyboardState.lastKeypress > boardConfig.timings.deepSleepWaitMs) {
     go_to_sleep();
   }
 }
@@ -240,8 +262,9 @@ void loop() {
 
   if (keyboard_active) {
     MatrixScanner::scan(boardConfig, runtimeState.matrix);
-    update_modifier_tap_state();
-    parse_keypress();
+    KeymapResolver::Result keymapResult = {};
+    KeymapResolver::resolve(runtimeState.matrix, keyboardState, keymapResolverConfig, keymapResult);
+    dispatch_keymap_result(keymapResult);
     if (linkState.splitCommunication) { parse_other_half(); }
     update_connected_led();
     service_split_link();
@@ -261,7 +284,7 @@ void loop() {
       delay(remaining_ms);
     }
 
-    if (millis() - runtimeState.loop.lastKeypress > boardConfig.timings.disconnectedDeepSleepMs) {
+    if (millis() - keyboardState.lastKeypress > boardConfig.timings.disconnectedDeepSleepMs) {
       go_to_sleep();
     }
   }
@@ -303,211 +326,71 @@ void update_battery_level() {
   runtimeState.battery.lastUpdate = millis();
 }
 
-
-void update_modifier_tap_state() {
-  MatrixState& matrix = runtimeState.matrix;
-
-  // Remember what time we last pressed the modifier key
-  if (matrix.previousKeyStates[MODKEY0] and (not matrix.keyStates[MODKEY0])) {
-    if (boardConfig.debug) {
-      Serial.println("Pressed the modifier key!");
-      Serial.print("Time since last tap: ");
-      Serial.println(millis() - runtimeState.modifiers.lastModTap);
-    }
-    // But first check if we got a double tap.
-    if ((millis() - runtimeState.modifiers.lastModTap) < boardConfig.timings.doubleTapIntervalMs) {
-      if (boardConfig.debug) {
-        Serial.println("Toggling modifier lock");
-      }
-      runtimeState.modifiers.lockedModKey = !runtimeState.modifiers.lockedModKey;
-      // Set the last tap to be somewhat in the past, so the next hit doesnt also trigger it
-      runtimeState.modifiers.lastModTap -= boardConfig.timings.doubleTapIntervalMs;
-    } else {
-      // Then, save the current tap time.
-      runtimeState.modifiers.lastModTap = millis();
-    }
+void dispatch_keymap_result(const KeymapResolver::Result& result) {
+  for (int i = 0; i < result.actionCount; i++) {
+    dispatch_keymap_action(result.actions[i]);
   }
+}
 
-  // Double-tap the shift key to toggle caps lock
-  if (SHIFTKEY0 >= 0 && matrix.previousKeyStates[SHIFTKEY0] && (not matrix.keyStates[SHIFTKEY0])) {
-    if ((millis() - runtimeState.modifiers.lastShiftTap) < boardConfig.timings.doubleTapIntervalMs) {
-      if (boardConfig.debug) { Serial.println("Toggling caps lock"); }
+void dispatch_keymap_action(const KeymapResolver::Action& action) {
+  bool use_local_hid = boardConfig.isPrimary || (!linkState.useGatt && !linkState.isConnected);
+
+  switch (action.type) {
+    case KeymapResolver::ActionType::None:
+      return;
+
+    case KeymapResolver::ActionType::ReleaseAll:
+      bleKB.releaseAll();
+      return;
+
+    case KeymapResolver::ActionType::TapCapsLock:
       bleKB.tap(KEY_CAPS_LOCK);
-      runtimeState.modifiers.lastShiftTap -= boardConfig.timings.doubleTapIntervalMs;
-    } else {
-      runtimeState.modifiers.lastShiftTap = millis();
-    }
-  }
-}
-
-
-void parse_keypress() {
-  if (runtimeState.modifiers.isAltLayout) {
-    parse_alt();
-  } else {
-    parse_typing();
-  }
-}
-
-void parse_alt() {
-  // Handle toggling back to typing
-  if (typing_toggle >= 0) {
-    if (runtimeState.matrix.keyStates[typing_toggle]) {
-      Serial.println("\nSWAPPING TO TYPING MODE\n");
-      runtimeState.modifiers.isAltLayout = false;
-
-      // release all keys
-      bleKB.releaseAll();
-      // To prevent the toggle key firing its key on the new layer, set its pState to True
-      runtimeState.matrix.previousKeyStates[typing_toggle] = 1;
-
       return;
-    }
-  }
 
-  send_keypress(alt_keymap);
-}
-
-void parse_typing() {
-  if (alt_toggle >= 0) {
-    if (runtimeState.matrix.keyStates[alt_toggle]) {
-      Serial.println("\nSWAPPING TO alt MODE\n");
-      runtimeState.modifiers.isAltLayout = true;
-
-      // release all keys
-      bleKB.releaseAll();
-      return;
-    }
-  }
-
-  send_keypress(keymap);
-}
-
-
-void send_keypress(int keys[]) {
-  MatrixState& matrix = runtimeState.matrix;
-
-  int pressed = 0;
-  // Handle layering
-  if (matrix.keyStates[MODKEY0] or runtimeState.modifiers.lockedModKey) {
-    pressed += NKEYS;
-  }
-
-  for (int i = 0; i < NKEYS; i++) {
-    if (matrix.keyStates[i] and (not matrix.previousKeyStates[i])) {
-      pressed += i;
-      int letterIndex = keys[pressed];
-
-      // Skip NC keys
-      if (letterIndex == -1) {
-        if (boardConfig.debug) {
-          Serial.println("Got a no-connect key");
-        }
-      } else if (letterIndex < -1) {
-        // Handling Media keys
-        letterIndex *= -1;  // Make it positive
-
-        if (boardConfig.isPrimary || (!linkState.useGatt && !linkState.isConnected)) {
-          if (!boardConfig.dummy) {
-            bleKB.tap(media_keys[letterIndex]);
-          }
-        } else if (linkState.useGatt) {
-          gatt_send_media_key(media_keys[letterIndex]);
-        }
-
-        if (boardConfig.debug) {
-          Serial.print("Detected a keypress at Media key, index: ");
-          Serial.println(letterIndex);
-        }
-      } else {
-        runtimeState.loop.lastKeypress = millis();
-
-        if (boardConfig.debug) {
-          Serial.print("I detected the keypress at index ");
-          Serial.println(pressed);
-          if (letterIndex == -1) {
-            Serial.println("Got a no-connect key");
-          } else {
-            Serial.print("This corresponds to the keystroke: ");
-            Serial.println(letters[letterIndex], HEX);
-          }
-        }
-
-        if (boardConfig.isPrimary || (!linkState.useGatt && !linkState.isConnected)) {
-          // Primary half always uses bleKB; wired secondary half falls back to bleKB when disconnected.
-          Serial.println(letters[letterIndex]);
-          if (!boardConfig.dummy) {
-            bleKB.press(letters[letterIndex], letter_mods[letterIndex]);
-          }
-        } else if (linkState.useGatt) {
-          // Wireless secondary half: relay keypress to primary via GATT.
-          gatt_send_key_press(letters[letterIndex], letter_mods[letterIndex]);
-        } else if (linkState.splitCommunication) {
-          Serial.print("Sending keystroke to partner: ");
-          Serial.println(letters[letterIndex]);
-          Serial2.write(press_flag);
-          Serial2.write(letters[letterIndex]);
-        }
-      }
-
-      // Subtract off again the keypress, so we can handle NKRO
-      pressed -= i;
-    }
-
-    // Key is released
-    if ((not matrix.keyStates[i]) and matrix.previousKeyStates[i]) {
-      pressed += i;
-
-      int letterIndex = keys[pressed];
-      if (boardConfig.debug) {
-        Serial.print("I detected a release at index ");
-        Serial.println(pressed);
-        Serial.print("This corresponds to the keystroke: ");
-        Serial.println(letters[letterIndex], HEX);
-      }
-
-      if (boardConfig.isPrimary || (!linkState.useGatt && !linkState.isConnected)) {
+    case KeymapResolver::ActionType::MediaTap:
+      if (use_local_hid) {
         if (!boardConfig.dummy) {
-          bleKB.release(letters[letterIndex]);
-          if (letter_mods[letterIndex]) { bleKB.release(KEY_LSHIFT); }
+          bleKB.tap(action.mediaCode);
+        }
+      } else if (linkState.useGatt) {
+        gatt_send_media_key(action.mediaCode);
+      }
+      return;
 
-          int letterIndex_alt = -1;
-          // also release the layer below me or above me
-          if (matrix.keyStates[MODKEY0] or runtimeState.modifiers.lockedModKey) {
-            letterIndex_alt = keys[pressed - NKEYS];
-          } else {
-            letterIndex_alt = keys[pressed + NKEYS];
-          }
+    case KeymapResolver::ActionType::MediaRelease:
+      if (use_local_hid && !boardConfig.dummy) {
+        bleKB.release(action.mediaCode);
+      }
+      return;
 
-          if (letterIndex_alt != -1) {
-            if (boardConfig.debug) {
-              Serial.print("Also releasing key at index: ");
-              Serial.println(letterIndex_alt);
-            }
-            bleKB.release(letters[letterIndex_alt]);
-          } else if (letterIndex_alt < -1) {
-            // Handling Media keys
-            letterIndex_alt *= -1;  // Make it positive
+    case KeymapResolver::ActionType::KeyPress:
+      if (use_local_hid) {
+        if (!boardConfig.dummy) {
+          bleKB.press(action.keycode, action.modifier);
+        }
+      } else if (linkState.useGatt) {
+        gatt_send_key_press(action.keycode, action.modifier);
+      } else if (linkState.splitCommunication) {
+        Serial2.write(press_flag);
+        Serial2.write(action.keycode);
+      }
+      return;
 
-            bleKB.release(media_keys[letterIndex_alt]);
-
-            if (boardConfig.debug) {
-              Serial.print("Also releasing Media key, index: ");
-              Serial.println(letterIndex);
-            }
+    case KeymapResolver::ActionType::KeyRelease:
+      if (use_local_hid) {
+        if (!boardConfig.dummy) {
+          bleKB.release(action.keycode);
+          if (action.modifier) {
+            bleKB.release(KEY_LSHIFT);
           }
         }
       } else if (linkState.useGatt) {
-        // Wireless secondary half: relay key release to primary via GATT.
-        gatt_send_key_release(letters[letterIndex], letter_mods[letterIndex]);
+        gatt_send_key_release(action.keycode, action.modifier);
       } else if (linkState.splitCommunication) {
         Serial2.write(release_flag);
-        Serial2.print(letters[letterIndex]);
+        Serial2.print(action.keycode);
       }
-
-      // Subtract off again the keypress, so we can handle NKRO
-      pressed -= i;
-    }
+      return;
   }
 }
 

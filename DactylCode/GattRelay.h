@@ -255,7 +255,7 @@ bool connect_to_primary_gatt() {
   }
 }
 
-// ── Send helpers called from send_keypress() ──────────────────────────────────
+// ── Send helpers called from the key event dispatch path ─────────────────────
 void gatt_send_key_press(uint8_t keycode, uint8_t modifier) {
   if (!gatt_client_ready || !pRemoteKeyChar) return;
   uint8_t data[3] = { GATT_KEY_PRESS, keycode, modifier };

@@ -3,6 +3,12 @@
 #include <Arduino.h>
 #include <HijelHID_BLEKeyboard.h>
 
+constexpr int MATRIX_KEY_COUNT = 35;
+
+#ifndef NKEYS
+#define NKEYS MATRIX_KEY_COUNT
+#endif
+
 struct LedConfig {
   int pin;
   int frequency;
