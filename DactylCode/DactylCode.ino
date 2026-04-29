@@ -37,14 +37,16 @@
 //******************************************************************
 
 // board-specific info in a header file. Make sure to change this!
-#include "config/BoardConfig_L.h"
-// #include "BoardConfig_R.h"
+// #include "config/BoardConfig_L.h"
+#include "config/BoardConfig_R.h"
 
 #include "RuntimeState.h"
 #include "MatrixScanner.h"
 #include "KeymapResolver.h"
 #include "HidDispatcher.h"
 #include "LinkManager.h"
+#include "PowerManager.h"
+#include "StatusLed.h"
 
 //******************************************************************
 
@@ -56,11 +58,8 @@ KeymapResolver::KeyboardState keyboardState = {};
 
 // Function declarations
 void initialize_debug_serial();
-void configure_led_pwm();
 void initialize_runtime_timers();
 bool keyboard_is_active(bool primary_has_ble_peer);
-void update_connected_led();
-void update_disconnected_led();
 void sleep_if_idle();
 void dispatch_keymap_result(const KeymapResolver::Result& result);
 void dispatch_keymap_action(const KeymapResolver::Action& action);
@@ -96,12 +95,6 @@ void initialize_debug_serial() {
   Serial.println(boardConfig.boardLabel);
 }
 
-void configure_led_pwm() {
-  ledcAttach(boardConfig.led.pin, boardConfig.led.frequency, boardConfig.led.resolution);
-  runtimeState.led.dutyCycle = boardConfig.led.maxDutyCycle;
-}
-
-
 void initialize_runtime_timers() {
   unsigned long now = millis();
   keyboardState.lastModTap = now;
@@ -119,33 +112,9 @@ bool keyboard_is_active(bool primary_has_ble_peer) {
                                : (can_primary_send_keys || linkState.isConnected);
 }
 
-
-void update_connected_led() {
-  runtimeState.led.outputState = HIGH;
-  if (keyboardState.lockedModKey) {
-    if (millis() - runtimeState.led.lastFlashToggle >= 125) {
-      runtimeState.led.flashHigh = !runtimeState.led.flashHigh;
-      runtimeState.led.lastFlashToggle = millis();
-    }
-    runtimeState.led.dutyCycle = runtimeState.led.flashHigh
-      ? boardConfig.led.maxDutyCycle
-      : boardConfig.led.maxDutyCycle / 2;
-  } else {
-    runtimeState.led.dutyCycle = boardConfig.led.maxDutyCycle / 2;
-  }
-
-  ledcWrite(boardConfig.led.pin, runtimeState.led.outputState * runtimeState.led.dutyCycle);
-}
-
-
-void update_disconnected_led() {
-  runtimeState.led.outputState = runtimeState.led.outputState == HIGH ? LOW : HIGH;
-  ledcWrite(boardConfig.led.pin, runtimeState.led.outputState * boardConfig.led.maxDutyCycle);
-}
-
 void sleep_if_idle() {
   if (millis() - keyboardState.lastKeypress > boardConfig.timings.deepSleepWaitMs) {
-    go_to_sleep();
+    PowerManager::enter_deep_sleep(boardConfig, runtimeState.led);
   }
 }
 
@@ -155,11 +124,11 @@ void setup() {
 
   initialize_debug_serial();
   MatrixScanner::configure_pins(boardConfig);
-  configure_led_pwm();
+  StatusLed::begin(boardConfig, runtimeState.led);
   LinkManager::begin(linkState);
   initialize_runtime_timers();
 
-  update_battery_level();
+  PowerManager::update_battery_level(boardConfig, linkState, runtimeState.battery);
 }
 
 
@@ -174,7 +143,7 @@ void loop() {
     KeymapResolver::resolve(runtimeState.matrix, keyboardState, keymapResolverConfig, keymapResult);
     dispatch_keymap_result(keymapResult);
     LinkManager::poll_incoming(linkState, boardConfig.dummy);
-    update_connected_led();
+    StatusLed::show_connected(boardConfig, runtimeState.led, keyboardState);
 
     int remaining_ms = boardConfig.timings.pollTimeMs - (int)(millis() - runtimeState.loop.lastLoop);
     if (remaining_ms > 1) {
@@ -183,7 +152,7 @@ void loop() {
 
   } else {
     if (boardConfig.debug) { Serial.println("Not connected to bluetooth..."); }
-    update_disconnected_led();
+    StatusLed::show_disconnected(boardConfig, runtimeState.led);
     LinkManager::poll_incoming(linkState, boardConfig.dummy);
 
     int remaining_ms = boardConfig.timings.disconnectedWaitMs - (int)(millis() - runtimeState.loop.lastLoop);
@@ -192,12 +161,12 @@ void loop() {
     }
 
     if (millis() - keyboardState.lastKeypress > boardConfig.timings.disconnectedDeepSleepMs) {
-      go_to_sleep();
+      PowerManager::enter_deep_sleep(boardConfig, runtimeState.led);
     }
   }
 
   if (millis() - runtimeState.battery.lastUpdate > boardConfig.timings.batteryPollIntervalMs) {
-    update_battery_level();
+    PowerManager::update_battery_level(boardConfig, linkState, runtimeState.battery);
   }
 
   sleep_if_idle();
@@ -205,33 +174,6 @@ void loop() {
   runtimeState.loop.lastLoop = millis();
 }
 
-
-void update_battery_level() {
-  int battery_measurement = analogRead(boardConfig.battery.pin);
-  float battery_voltage = battery_measurement * (boardConfig.battery.refVoltage * 2.0 * 1.1 / 4095);
-  // min voltage is 3.2, max is 4.2
-  float battery_percentage = 100.0 * (battery_voltage - boardConfig.battery.minVoltage)
-                           / (boardConfig.battery.maxVoltage - boardConfig.battery.minVoltage);
-
-  if (battery_percentage > 100.0) { battery_percentage = 100.0; }
-  if (battery_percentage < 0.0) { battery_percentage = 0.0; }
-
-  //  if (DEBUG) {
-  //    Serial.print("My battery pin measured ");
-  //    Serial.println(battery_measurement);
-  //    Serial.print("Which corresponds to a voltage of ");
-  //    Serial.println(battery_voltage);
-  //    Serial.print("And this is ");
-  //    Serial.print(battery_percentage);
-  //    Serial.println("% full.");
-  //  }
-
-  // Wireless secondary half has no HID connection, so there's nowhere to report battery.
-  if (!(linkState.useGatt && !boardConfig.isPrimary)) {
-    HidDispatcher::set_battery_level(battery_percentage);
-  }
-  runtimeState.battery.lastUpdate = millis();
-}
 
 void dispatch_keymap_result(const KeymapResolver::Result& result) {
   for (int i = 0; i < result.actionCount; i++) {
@@ -282,25 +224,3 @@ void dispatch_keymap_action(const KeymapResolver::Action& action) {
   }
 }
 
-void go_to_sleep() {
-  if (boardConfig.debug) { Serial.println("Entering deep sleep!"); }
-
-  runtimeState.led.outputState = LOW;
-  digitalWrite(boardConfig.led.pin, runtimeState.led.outputState);
-
-  // Clear the light-sleep timer wakeup so it doesn't fire during deep sleep
-  esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_TIMER);
-
-  uint64_t buttonPinMask = MatrixScanner::build_wake_pin_mask(boardConfig);
-  if (boardConfig.debug) {
-    Serial.print("Button pin mask is: ");
-    Serial.println(buttonPinMask);
-  }
-
-  MatrixScanner::prepare_wake_pins(boardConfig);
-
-  esp_sleep_enable_ext1_wakeup(buttonPinMask, ESP_EXT1_WAKEUP_ANY_HIGH);
-  Serial.println("Going to sleep...");
-
-  esp_deep_sleep_start();
-}
