@@ -2,37 +2,25 @@
 // User-editable stuff goes here //
 // ------------------------------//
 
+#include "BoardConfig.h"
+
 // Keymaps
 #include "KeyLayout_L.h"
-
-const bool DEBUG = false;
-// In dummy mode, I don't actually send my key presses.
-const bool DUMMY = false;
-
-
-// split_keeb_communication is set at runtime by detect_wired_connection() in GattRelay.h.
-const bool is_primary = true;
-
-
-HijelHID_BLEKeyboard bleKB("TwoBrownFoxes", "JWILD", 50);
-
 
 // PINS!
 
 // Software Serial pins
-#define RXD2 16
-#define TXD2 17
+static const int SERIAL_RX_PIN = 16;
+static const int SERIAL_TX_PIN = 17;
 
 // Status LED
-const int LEDPin = 21;
+static const int LED_PIN = 21;
 
 // Columns are READ
-int colPins[] = {33, 12, 13, 14, 15};
-int NCOLS = 5;
+static const int COL_PINS[] = {33, 12, 13, 14, 15};
 
 // Rows are DRIVEN HIGH
-int rowPins[] = {27, 32, 22, 23, 19, 16, 17};
-int NROWS = 7;
+static const int ROW_PINS[] = {27, 32, 22, 23, 19, 16, 17};
 
 // For waking from deepsleep,
 // you *could* have these pins listen for a HIGH signal to wake the controller.
@@ -41,50 +29,50 @@ int NROWS = 7;
 // GPIO33 -> Esc, 1, 2, 3, 4, 5, Home
 // GPIO13 -> Left Shift, A, S, D, F, G
 // GPIO14 -> Left Ctrl, Z, X, C, V, B, Space
-int wakePins[] = {33, 13, 14};
-int NWAKE = 3;
+static const int WAKE_PINS[] = {33, 13, 14};
 
-// For communicating the battery percentage
-int batteryPin = A13;
+HijelHID_BLEKeyboard bleKB("TwoBrownFoxes", "JWILD", 50);
 
-float battery_ref_voltage = 3.3;
-float battery_min_voltage = 3.2;
-float battery_max_voltage = 4.2;
-
-
-// LED brightness settings
-int frequency = 5000;
-const int ledChannel = 0;
-const int resolution = 8;
-const int max_duty_cycle = 200;
-
-// TIMINGS!
-
-// 125Hz is generally standard. ESP32 could push higher though.
-int poll_time = 5; // ms
-
-// you can double-tap the modifier to lock it.
-int double_tap_interval = 1000; // ms
-
-// When we're disconnected, we can sit on our hands for a while
-int disconnected_wait = 500; // ms
-// And if we're disconnected, we can have a lower threshold for going to sleep
-int disconnected_deepsleep = 1000 * 60 * 2; // ms
-
-// How long to wait between setting a row high, and reading the column voltage.
-// Pushing this too low induces phantom presses in adjacent keyswitch wires.
-// 10us * 35 keys = 0.35ms.
-int key_delay_us = 10; // MICROseconds!
-
-// how long after the last keystroke before entering deep sleep.
-int deepsleep_wait = 1000 * 60 * 10; // ms
-
-// How long between battery voltage updates. Will report garbage when charging
-int battery_poll_interval = 1000 * 10; // ms
-
-// Frequency of checking my connection to my partner
-int keep_alive_delay = 500; //ms
-int keep_alive_lifespan = 1500; //ms
+const BoardConfig boardConfig = {
+	"Left half",
+	"TwoBrownFoxes",
+	"TwoBrownFoxes",
+	"JWILD",
+	false,
+	false,
+	true,
+	SERIAL_RX_PIN,
+	SERIAL_TX_PIN,
+	COL_PINS,
+	5,
+	ROW_PINS,
+	7,
+	WAKE_PINS,
+	3,
+	{
+		LED_PIN,
+		5000,
+		8,
+		200,
+	},
+	{
+		A13,
+		3.3,
+		3.2,
+		4.2,
+	},
+	{
+		5,
+		1000,
+		500,
+		1000 * 60 * 2,
+		10,
+		1000 * 60 * 10,
+		1000 * 10,
+		500,
+		1500,
+	},
+};
 
 // -------------------------------//
 //   END OF USER-EDITABLE STUFF   //
