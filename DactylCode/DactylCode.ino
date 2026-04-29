@@ -37,17 +37,14 @@
 //******************************************************************
 
 // board-specific info in a header file. Make sure to change this!
-#include "BoardConfig_L.h"
+#include "config/BoardConfig_L.h"
 // #include "BoardConfig_R.h"
 
 #include "RuntimeState.h"
 #include "MatrixScanner.h"
 #include "KeymapResolver.h"
 #include "HidDispatcher.h"
-
-// Wireless GATT relay between halves (must come after BoardConfig so that
-// bleKB and boardConfig are already declared).
-#include "GattRelay.h"
+#include "LinkManager.h"
 
 //******************************************************************
 
@@ -56,23 +53,14 @@ RuntimeState runtimeState = {};
 LinkState& linkState = runtimeState.link;
 KeymapResolver::KeyboardState keyboardState = {};
 
-// For communicating with the other half - sends this message first
-// to denote a press or release
-const uint8_t press_flag = B00001111;
-const uint8_t release_flag = B11110000;
-
 
 // Function declarations
 void initialize_debug_serial();
-void detect_link_mode();
 void configure_led_pwm();
-void initialize_transport();
 void initialize_runtime_timers();
-bool refresh_primary_gatt_peer_state();
 bool keyboard_is_active(bool primary_has_ble_peer);
 void update_connected_led();
 void update_disconnected_led();
-void service_split_link();
 void sleep_if_idle();
 void dispatch_keymap_result(const KeymapResolver::Result& result);
 void dispatch_keymap_action(const KeymapResolver::Action& action);
@@ -108,42 +96,9 @@ void initialize_debug_serial() {
   Serial.println(boardConfig.boardLabel);
 }
 
-
-void detect_link_mode() {
-  if (detect_wired_connection()) {
-    linkState.splitCommunication = true;
-    linkState.useGatt = false;
-    if (boardConfig.debug) { Serial.println("Connection: WIRED (Serial2)"); }
-  } else {
-    linkState.splitCommunication = false;
-    linkState.useGatt = true;
-    if (boardConfig.debug) { Serial.println("Connection: WIRELESS (GATT)"); }
-  }
-}
-
-
 void configure_led_pwm() {
   ledcAttach(boardConfig.led.pin, boardConfig.led.frequency, boardConfig.led.resolution);
   runtimeState.led.dutyCycle = boardConfig.led.maxDutyCycle;
-}
-
-
-void initialize_transport() {
-  // If we're wireless and the primary half, start the BLE keyboard immediately so we're discoverable during GATT connection.
-  if (!linkState.useGatt && boardConfig.isPrimary) {
-    HidDispatcher::begin();
-  }
-
-  // If we're wireless, start the GATT bits
-  if (!linkState.useGatt) {
-    return;
-  }
-
-  if (boardConfig.isPrimary) {
-    setup_gatt_server();
-  } else {
-    connect_to_primary_gatt();
-  }
 }
 
 
@@ -154,33 +109,6 @@ void initialize_runtime_timers() {
   linkState.lastKeepAliveCheck = now;
   runtimeState.loop.lastLoop = now;
 }
-
-
-bool refresh_primary_gatt_peer_state() {
-  // If we're not wireless, or not the primary, no-op
-  if (!(linkState.useGatt && boardConfig.isPrimary)) {
-    return false;
-  }
-
-  NimBLEServer* server = NimBLEDevice::getServer();
-  if (server == nullptr) {
-    return false;
-  }
-
-  // We expect either 0 or 1 connected peers (the secondary), but if we have more something's weird and we should just keep advertising.
-  uint8_t connected_count = server->getConnectedCount();
-  bool primary_has_ble_peer = connected_count > 0;
-  NimBLEAdvertising* advertising = server->getAdvertising();
-  if (advertising != nullptr
-      && connected_count > 0
-      && connected_count != linkState.lastGattConnectedCount
-      && !advertising->isAdvertising()) {
-    server->startAdvertising();
-  }
-  linkState.lastGattConnectedCount = connected_count;
-  return primary_has_ble_peer;
-}
-
 
 bool keyboard_is_active(bool primary_has_ble_peer) {
   bool is_wireless_secondary = linkState.useGatt && !boardConfig.isPrimary;
@@ -215,22 +143,6 @@ void update_disconnected_led() {
   ledcWrite(boardConfig.led.pin, runtimeState.led.outputState * boardConfig.led.maxDutyCycle);
 }
 
-
-void service_split_link() {
-  if (!linkState.splitCommunication) {
-    return;
-  }
-
-  if (millis() - linkState.lastKeepAliveCheck > boardConfig.timings.keepAliveDelayMs) {
-    send_keep_alive();
-  }
-
-  if (millis() - boardConfig.timings.keepAliveLifespanMs > linkState.lastKeepAliveTime) {
-    linkState.isConnected = false;
-  }
-}
-
-
 void sleep_if_idle() {
   if (millis() - keyboardState.lastKeypress > boardConfig.timings.deepSleepWaitMs) {
     go_to_sleep();
@@ -242,10 +154,9 @@ void setup() {
   MatrixScanner::release_sleep_matrix_config(boardConfig);
 
   initialize_debug_serial();
-  detect_link_mode();
   MatrixScanner::configure_pins(boardConfig);
   configure_led_pwm();
-  initialize_transport();
+  LinkManager::begin(linkState);
   initialize_runtime_timers();
 
   update_battery_level();
@@ -253,12 +164,8 @@ void setup() {
 
 
 void loop() {
-  bool is_wireless_secondary = linkState.useGatt && !boardConfig.isPrimary;
-  if (is_wireless_secondary && !linkState.isConnected) {
-    connect_to_primary_gatt();
-  }
-
-  bool primary_has_ble_peer = refresh_primary_gatt_peer_state();
+  LinkManager::tick(linkState);
+  bool primary_has_ble_peer = LinkManager::has_primary_ble_peer();
   bool keyboard_active = keyboard_is_active(primary_has_ble_peer);
 
   if (keyboard_active) {
@@ -266,9 +173,8 @@ void loop() {
     KeymapResolver::Result keymapResult = {};
     KeymapResolver::resolve(runtimeState.matrix, keyboardState, keymapResolverConfig, keymapResult);
     dispatch_keymap_result(keymapResult);
-    if (linkState.splitCommunication) { parse_other_half(); }
+    LinkManager::poll_incoming(linkState, boardConfig.dummy);
     update_connected_led();
-    service_split_link();
 
     int remaining_ms = boardConfig.timings.pollTimeMs - (int)(millis() - runtimeState.loop.lastLoop);
     if (remaining_ms > 1) {
@@ -278,7 +184,7 @@ void loop() {
   } else {
     if (boardConfig.debug) { Serial.println("Not connected to bluetooth..."); }
     update_disconnected_led();
-    if (linkState.splitCommunication) { parse_other_half(); }
+    LinkManager::poll_incoming(linkState, boardConfig.dummy);
 
     int remaining_ms = boardConfig.timings.disconnectedWaitMs - (int)(millis() - runtimeState.loop.lastLoop);
     if (remaining_ms > 1) {
@@ -346,8 +252,8 @@ void dispatch_keymap_action(const KeymapResolver::Action& action) {
     case KeymapResolver::ActionType::MediaTap:
       if (use_local_hid) {
         HidDispatcher::dispatch_action(action, boardConfig.dummy);
-      } else if (linkState.useGatt) {
-        gatt_send_media_key(action.mediaCode);
+      } else {
+        LinkManager::dispatch_remote_action(action, linkState);
       }
       return;
 
@@ -361,71 +267,18 @@ void dispatch_keymap_action(const KeymapResolver::Action& action) {
     case KeymapResolver::ActionType::KeyPress:
       if (use_local_hid) {
         HidDispatcher::dispatch_action(action, boardConfig.dummy);
-      } else if (linkState.useGatt) {
-        gatt_send_key_press(action.keycode, action.modifier);
-      } else if (linkState.splitCommunication) {
-        Serial2.write(press_flag);
-        Serial2.write(action.keycode);
+      } else {
+        LinkManager::dispatch_remote_action(action, linkState);
       }
       return;
 
     case KeymapResolver::ActionType::KeyRelease:
       if (use_local_hid) {
         HidDispatcher::dispatch_action(action, boardConfig.dummy);
-      } else if (linkState.useGatt) {
-        gatt_send_key_release(action.keycode, action.modifier);
-      } else if (linkState.splitCommunication) {
-        Serial2.write(release_flag);
-        Serial2.print(action.keycode);
+      } else {
+        LinkManager::dispatch_remote_action(action, linkState);
       }
       return;
-  }
-}
-
-void send_keep_alive() {
-  if (boardConfig.isPrimary) {
-    Serial.println("Sending keep alive...");
-    Serial2.write(linkState.keepAliveMessage);
-    linkState.lastKeepAliveCheck = millis();
-  }
-}
-
-void parse_other_half() {
-  bool cont = true;
-  while (cont) {
-    if (Serial2.available()) {
-      Serial.println("I have serial to parse...");
-      int is_press = Serial2.read();
-
-      // check if it's a keep alive message
-      if (is_press == linkState.keepAliveMessage) {
-        Serial.println("Got a keep alive message! Still linked to the other half.");
-
-        // Set flag and timer.
-        linkState.isConnected = true;
-        linkState.lastKeepAliveTime = millis();
-
-      } else if ((is_press == press_flag) or (is_press == release_flag)) {
-        Serial.print("I got the message ");
-        Serial.print(is_press);
-        Serial.println(" so I expect a second message. Waiting for that now...");
-
-        // Get the second half of the message
-        while (not Serial2.available())
-          ;
-        uint8_t recv = uint8_t(Serial2.read());
-
-        if (is_press == press_flag) {
-          HidDispatcher::press_passthrough(recv, boardConfig.dummy);
-        } else if (is_press == release_flag) {
-          HidDispatcher::release_passthrough(recv);
-        }
-      } else {
-        Serial.println(is_press);
-      }
-    }
-
-    cont = Serial2.available() > 0;
   }
 }
 
