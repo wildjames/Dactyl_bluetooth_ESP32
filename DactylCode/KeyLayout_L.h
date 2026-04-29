@@ -14,9 +14,6 @@ int SHIFTKEY0 = 2;
 int alt_toggle = -1;
 int typing_toggle = -1;
 
-// Keys per half, NCOLS * NROWS, must be calculated by the user.
-#define NKEYS 35
-
 int keymap[] = {
   // Needs to be the index of the desired key in the letters array.
   // Layers are accessed by adding NKEYS to the pressed switch ID,

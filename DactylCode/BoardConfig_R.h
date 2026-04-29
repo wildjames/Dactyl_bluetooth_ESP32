@@ -7,9 +7,6 @@
 // Keymaps
 #include "KeyLayout_R.h"
 
-// Keys per half, NCOLS * NROWS, must be calculated by the user.
-#define NKEYS 35
-
 // PINS!
 
 // Software Serial pins
