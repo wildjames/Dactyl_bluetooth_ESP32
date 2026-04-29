@@ -19,6 +19,7 @@
 #include <NimBLEDevice.h>
 
 #include "RuntimeState.h"
+#include "HidDispatcher.h"
 
 // ── UUIDs ─────────────────────────────────────────────────────────────────────
 #define RELAY_SERVICE_UUID  "4FAFC201-1FB5-459E-8FCC-C5C9C331914B"
@@ -102,13 +103,12 @@ class KeyEventCallbacks : public NimBLECharacteristicCallbacks {
     if (boardConfig.dummy) return;
 
     if (evt == GATT_KEY_PRESS) {
-      bleKB.press(b1, b2);              // b1 = keycode, b2 = modifier
+      HidDispatcher::press_key(b1, b2, boardConfig.dummy);   // b1 = keycode, b2 = modifier
     } else if (evt == GATT_KEY_RELEASE) {
-      bleKB.release(b1);                // b1 = keycode
-      if (b2) bleKB.release(KEY_LSHIFT); // b2 = modifier; release shift if needed
+      HidDispatcher::release_key(b1, b2, boardConfig.dummy); // b1 = keycode, b2 = modifier
     } else if (evt == GATT_MEDIA_KEY) {
       uint16_t mediaCode = (uint16_t)b1 | ((uint16_t)b2 << 8);
-      bleKB.tap(mediaCode);
+      HidDispatcher::tap_media(mediaCode, boardConfig.dummy);
     }
   }
 };

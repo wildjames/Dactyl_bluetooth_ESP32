@@ -43,6 +43,7 @@
 #include "RuntimeState.h"
 #include "MatrixScanner.h"
 #include "KeymapResolver.h"
+#include "HidDispatcher.h"
 
 // Wireless GATT relay between halves (must come after BoardConfig so that
 // bleKB and boardConfig are already declared).
@@ -130,7 +131,7 @@ void configure_led_pwm() {
 void initialize_transport() {
   // If we're wireless and the primary half, start the BLE keyboard immediately so we're discoverable during GATT connection.
   if (!linkState.useGatt && boardConfig.isPrimary) {
-    bleKB.begin();
+    HidDispatcher::begin();
   }
 
   // If we're wireless, start the GATT bits
@@ -183,7 +184,7 @@ bool refresh_primary_gatt_peer_state() {
 
 bool keyboard_is_active(bool primary_has_ble_peer) {
   bool is_wireless_secondary = linkState.useGatt && !boardConfig.isPrimary;
-  bool has_primary_ble_link = bleKB.isConnected() || bleKB.isPaired();
+  bool has_primary_ble_link = HidDispatcher::has_host_connection();
   bool can_primary_send_keys = has_primary_ble_link || primary_has_ble_peer;
 
   return is_wireless_secondary ? linkState.isConnected
@@ -321,7 +322,7 @@ void update_battery_level() {
 
   // Wireless secondary half has no HID connection, so there's nowhere to report battery.
   if (!(linkState.useGatt && !boardConfig.isPrimary)) {
-    bleKB.setBatteryLevel(battery_percentage);
+    HidDispatcher::set_battery_level(battery_percentage);
   }
   runtimeState.battery.lastUpdate = millis();
 }
@@ -339,35 +340,27 @@ void dispatch_keymap_action(const KeymapResolver::Action& action) {
     case KeymapResolver::ActionType::None:
       return;
 
+    // These actions are local to the board and don't need to be forwarded
     case KeymapResolver::ActionType::ReleaseAll:
-      bleKB.releaseAll();
-      return;
-
     case KeymapResolver::ActionType::TapCapsLock:
-      bleKB.tap(KEY_CAPS_LOCK);
-      return;
-
     case KeymapResolver::ActionType::MediaTap:
       if (use_local_hid) {
-        if (!boardConfig.dummy) {
-          bleKB.tap(action.mediaCode);
-        }
+        HidDispatcher::dispatch_action(action, boardConfig.dummy);
       } else if (linkState.useGatt) {
         gatt_send_media_key(action.mediaCode);
       }
       return;
 
+    // Key presses that need to be forwarded to the primary, or sent to the host if we're the primary
     case KeymapResolver::ActionType::MediaRelease:
-      if (use_local_hid && !boardConfig.dummy) {
-        bleKB.release(action.mediaCode);
+      if (use_local_hid) {
+        HidDispatcher::dispatch_action(action, boardConfig.dummy);
       }
       return;
 
     case KeymapResolver::ActionType::KeyPress:
       if (use_local_hid) {
-        if (!boardConfig.dummy) {
-          bleKB.press(action.keycode, action.modifier);
-        }
+        HidDispatcher::dispatch_action(action, boardConfig.dummy);
       } else if (linkState.useGatt) {
         gatt_send_key_press(action.keycode, action.modifier);
       } else if (linkState.splitCommunication) {
@@ -378,12 +371,7 @@ void dispatch_keymap_action(const KeymapResolver::Action& action) {
 
     case KeymapResolver::ActionType::KeyRelease:
       if (use_local_hid) {
-        if (!boardConfig.dummy) {
-          bleKB.release(action.keycode);
-          if (action.modifier) {
-            bleKB.release(KEY_LSHIFT);
-          }
-        }
+        HidDispatcher::dispatch_action(action, boardConfig.dummy);
       } else if (linkState.useGatt) {
         gatt_send_key_release(action.keycode, action.modifier);
       } else if (linkState.splitCommunication) {
@@ -428,9 +416,9 @@ void parse_other_half() {
         uint8_t recv = uint8_t(Serial2.read());
 
         if (is_press == press_flag) {
-          if (!boardConfig.dummy) { bleKB.press(recv); }
+          HidDispatcher::press_passthrough(recv, boardConfig.dummy);
         } else if (is_press == release_flag) {
-          bleKB.release(recv);
+          HidDispatcher::release_passthrough(recv);
         }
       } else {
         Serial.println(is_press);
