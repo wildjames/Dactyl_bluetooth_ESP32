@@ -33,8 +33,12 @@
 // ── Boot-time wire-detection ──────────────────────────────────────────────────
 #define WIRE_DETECT_SYNC          0xAA
 #define WIRE_DETECT_ACK           0x55
-#define WIRE_DETECT_TIMEOUT_MS    2000  // total window (ms)
-#define WIRE_DETECT_PING_INTERVAL 50    // ms between primary-half SYNC pings
+#define WIRE_DETECT_TIMEOUT_MS    500   // total window (ms)
+#define WIRE_DETECT_PING_INTERVAL 20    // ms between primary-half SYNC pings
+
+#define GATT_SCAN_BURST_MS        750   // ms per discovery pass before attempting connect
+#define GATT_RETRY_DELAY_MS       100   // ms between scan retries when nothing is found
+#define GATT_CONNECT_TIMEOUT_MS   2000  // ms before abandoning a connection attempt
 
 // ── Secondary half scans for the primary by BLE device name ──────────────────
 // BoardConfig_R.h defines PRIMARY_BLE_NAME; provide a fallback for the primary
@@ -186,15 +190,15 @@ bool connect_to_primary_gatt() {
 
   NimBLEScan* pScan = NimBLEDevice::getScan();
   pScan->setActiveScan(true);
-  pScan->setInterval(45);
-  pScan->setWindow(15);
+  pScan->setInterval(30);
+  pScan->setWindow(30);
 
   while (true) {
     if (DEBUG) { Serial.println("[GATT] Scanning for primary relay service..."); }
 
-    // start() duration is in milliseconds in NimBLE 2.x (not seconds).
-    // Non-blocking; wait on isScanning() for it to finish.
-    pScan->start(10000, false);
+    // Scan in short bursts so we can attempt a connection as soon as the
+    // primary half is discovered instead of waiting for a long scan to finish.
+    pScan->start(GATT_SCAN_BURST_MS, false);
     while (pScan->isScanning()) { delay(100); }
 
     NimBLEScanResults results = pScan->getResults();
@@ -221,7 +225,7 @@ bool connect_to_primary_gatt() {
       NimBLEClient* pClient = NimBLEDevice::createClient();
       pClient->setClientCallbacks(new GattClientCallbacks(), false);
       pClient->setConnectionParams(12, 12, 0, 51);
-      pClient->setConnectTimeout(5000);
+      pClient->setConnectTimeout(GATT_CONNECT_TIMEOUT_MS);
 
       if (!pClient->connect(dev)) {
         if (DEBUG) { Serial.println("[GATT] Connection failed; will retry scan"); }
@@ -253,7 +257,7 @@ bool connect_to_primary_gatt() {
 
     if (DEBUG) { Serial.println("[GATT] Primary half not found, retrying scan..."); }
     pScan->clearResults();
-    delay(1000);
+    delay(GATT_RETRY_DELAY_MS);
   }
 }
 
