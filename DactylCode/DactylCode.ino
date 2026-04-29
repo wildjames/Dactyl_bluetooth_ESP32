@@ -37,8 +37,8 @@
 //******************************************************************
 
 // board-specific info in a header file. Make sure to change this!
-#include "BoardConfig_L.h"
-// #include "BoardConfig_R.h"
+// #include "BoardConfig_L.h"
+#include "BoardConfig_R.h"
 
 // Wireless GATT relay between halves (must come after BoardConfig so that
 // bleKB, DEBUG, is_primary, RXD2/TXD2 are already declared).
@@ -54,14 +54,14 @@
 #include "driver/rtc_io.h"
 
 // Tracks the keys.
-int keyStates[NKEYS] = {0};
-int pKeyStates[NKEYS] = {0};
+int keyStates[NKEYS] = { 0 };
+int pKeyStates[NKEYS] = { 0 };
 
 // Connection-mode flags – set once at boot by detect_wired_connection().
 // split_keeb_communication: true  → wired Serial2 path (original behaviour).
 // use_gatt:                 true  → wireless GATT path (new behaviour).
 bool split_keeb_communication = false;
-bool use_gatt                 = false;
+bool use_gatt = false;
 
 // For communicating with the other half - sends this message first
 // to denote a press or release
@@ -141,24 +141,24 @@ void setup() {
   // If the other half replies within 2 s we are wired; otherwise go wireless.
   if (detect_wired_connection()) {
     split_keeb_communication = true;
-    use_gatt                 = false;
+    use_gatt = false;
     if (DEBUG) { Serial.println("Connection: WIRED (Serial2)"); }
   } else {
     split_keeb_communication = false;
-    use_gatt                 = true;
+    use_gatt = true;
     if (DEBUG) { Serial.println("Connection: WIRELESS (GATT)"); }
   }
 
-  if (DEBUG) {Serial.println("Row nums:");}
-  for (int i=0; i<NROWS; i++) {
-    if (DEBUG) {Serial.println(rowPins[i]);}
+  if (DEBUG) { Serial.println("Row nums:"); }
+  for (int i = 0; i < NROWS; i++) {
+    if (DEBUG) { Serial.println(rowPins[i]); }
     pinMode(rowPins[i], OUTPUT);
     gpio_hold_dis((gpio_num_t)rowPins[i]);
     digitalWrite(rowPins[i], LOW);
   }
-  if (DEBUG) {Serial.println("Col nums:");}
-  for (int i=0; i<NCOLS; i++) {
-    if (DEBUG) {Serial.println(colPins[i]);}
+  if (DEBUG) { Serial.println("Col nums:"); }
+  for (int i = 0; i < NCOLS; i++) {
+    if (DEBUG) { Serial.println(colPins[i]); }
     pinMode(colPins[i], INPUT_PULLDOWN);
   }
 
@@ -233,7 +233,7 @@ void loop() {
     // Handle and keypresses on my side of things
     parse_keypress();
     // See what my other half is doing
-    if (split_keeb_communication) {parse_other_half();}
+    if (split_keeb_communication) { parse_other_half(); }
 
     // Set the LED brightness.
     led_state = HIGH;
@@ -264,14 +264,18 @@ void loop() {
     }
 
   } else {
-    if (DEBUG) {Serial.println("Not connected to bluetooth...");}
+    if (DEBUG) { Serial.println("Not connected to bluetooth..."); }
 
     // Flash the LED
-    if (led_state == HIGH) {led_state = LOW;} else {led_state = HIGH;}
+    if (led_state == HIGH) {
+      led_state = LOW;
+    } else {
+      led_state = HIGH;
+    }
     ledcWrite(LEDPin, led_state * max_duty_cycle);
 
     // See what my other half is doing
-    if (split_keeb_communication) {parse_other_half();}
+    if (split_keeb_communication) { parse_other_half(); }
 
     // Yield for the disconnected wait window
     int remaining_ms = disconnected_wait - (int)(millis() - last_loop);
@@ -283,7 +287,6 @@ void loop() {
     if (millis() - last_keypress > disconnected_deepsleep) {
       go_to_sleep();
     }
-
   }
 
   // Do I need to update the battery?
@@ -306,18 +309,18 @@ void update_battery_level() {
   // min voltage is 3.2, max is 4.2
   float battery_percentage = 100.0 * (battery_voltage - battery_min_voltage) / (battery_max_voltage - battery_min_voltage);
 
-  if (battery_percentage > 100.0) {battery_percentage = 100.0;}
-  if (battery_percentage < 0.0) {battery_percentage = 0.0;}
+  if (battery_percentage > 100.0) { battery_percentage = 100.0; }
+  if (battery_percentage < 0.0) { battery_percentage = 0.0; }
 
-//  if (DEBUG) {
-//    Serial.print("My battery pin measured ");
-//    Serial.println(battery_measurement);
-//    Serial.print("Which corresponds to a voltage of ");
-//    Serial.println(battery_voltage);
-//    Serial.print("And this is ");
-//    Serial.print(battery_percentage);
-//    Serial.println("% full.");
-//  }
+  //  if (DEBUG) {
+  //    Serial.print("My battery pin measured ");
+  //    Serial.println(battery_measurement);
+  //    Serial.print("Which corresponds to a voltage of ");
+  //    Serial.println(battery_voltage);
+  //    Serial.print("And this is ");
+  //    Serial.print(battery_percentage);
+  //    Serial.println("% full.");
+  //  }
 
   // Wireless secondary half has no HID connection, so there's nowhere to report battery.
   if (!(use_gatt && !is_primary)) {
@@ -332,9 +335,9 @@ void poll_pins() {
   int k = 0;
 
   // Loop over and check what the current state is. Store previous state as well.
-  for (int i=0; i<NROWS; i++) {
+  for (int i = 0; i < NROWS; i++) {
     digitalWrite(rowPins[i], HIGH);
-    for (int j=0; j<NCOLS; j++) {
+    for (int j = 0; j < NCOLS; j++) {
       bool val = digitalRead(colPins[j]);
 
       // Store the current and previous key states
@@ -425,11 +428,6 @@ void parse_typing() {
 }
 
 
-void press_key_at_index(int letterIndex) {
-
-}
-
-
 void send_keypress(int keys[]) {
   int pressed = 0;
   // Handle layering
@@ -437,7 +435,7 @@ void send_keypress(int keys[]) {
     pressed += NKEYS;
   }
 
-  for (int i=0; i<NKEYS; i++) {
+  for (int i = 0; i < NKEYS; i++) {
     if (keyStates[i] and (not pKeyStates[i])) {
       pressed += i;
       int letterIndex = keys[pressed];
@@ -449,7 +447,7 @@ void send_keypress(int keys[]) {
         }
       } else if (letterIndex < -1) {
         // Handling Media keys
-        letterIndex *= -1; // Make it positive
+        letterIndex *= -1;  // Make it positive
 
         if (is_primary || (!use_gatt && !is_connected)) {
           if (not DUMMY) {
@@ -518,9 +516,9 @@ void send_keypress(int keys[]) {
           int letterIndex_alt = -1;
           // also release the layer below me or above me
           if (keyStates[MODKEY0] or locked_modkey) {
-            letterIndex_alt = keys[pressed-NKEYS];
+            letterIndex_alt = keys[pressed - NKEYS];
           } else {
-            letterIndex_alt = keys[pressed+NKEYS];
+            letterIndex_alt = keys[pressed + NKEYS];
           }
 
           if (letterIndex_alt != -1) {
@@ -531,7 +529,7 @@ void send_keypress(int keys[]) {
             bleKB.release(letters[letterIndex_alt]);
           } else if (letterIndex_alt < -1) {
             // Handling Media keys
-            letterIndex_alt *= -1; // Make it positive
+            letterIndex_alt *= -1;  // Make it positive
 
             bleKB.release(media_keys[letterIndex_alt]);
 
@@ -542,7 +540,7 @@ void send_keypress(int keys[]) {
           }
         }
       } else if (use_gatt) {
-          // Wireless secondary half: relay key release to primary via GATT.
+        // Wireless secondary half: relay key release to primary via GATT.
         gatt_send_key_release(letters[letterIndex], letter_mods[letterIndex]);
       } else if (split_keeb_communication) {
         Serial2.write(release_flag);
@@ -584,11 +582,12 @@ void parse_other_half() {
         Serial.println(" so I expect a second message. Waiting for that now...");
 
         // Get the second half of the message
-        while (not Serial2.available());
+        while (not Serial2.available())
+          ;
         uint8_t recv = uint8_t(Serial2.read());
 
         if (is_press == press_flag) {
-          if (not DUMMY) {bleKB.press(recv);}
+          if (not DUMMY) { bleKB.press(recv); }
         } else if (is_press == release_flag) {
           bleKB.release(recv);
         }
@@ -602,7 +601,7 @@ void parse_other_half() {
 }
 
 void go_to_sleep() {
-  if (DEBUG) {Serial.println("Entering deep sleep!");}
+  if (DEBUG) { Serial.println("Entering deep sleep!"); }
 
   led_state = LOW;
   digitalWrite(LEDPin, led_state);
@@ -612,7 +611,7 @@ void go_to_sleep() {
 
   // Set which column pins can wake the device
   uint64_t buttonPinMask = 0;
-  for (int i=0; i < NWAKE; i++) {
+  for (int i = 0; i < NWAKE; i++) {
     buttonPinMask |= (1ULL << wakePins[i]);
   }
   if (DEBUG) {

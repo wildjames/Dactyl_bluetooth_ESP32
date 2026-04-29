@@ -77,7 +77,7 @@ int disconnected_deepsleep = 1000 * 60 * 2; // ms
 int key_delay_us = 10; // MICROseconds!
 
 // how long after the last keystroke before entering deep sleep.
-int deepsleep_wait = 1000 * 60 * 1; // ms
+int deepsleep_wait = 1000 * 60 * 10; // ms
 
 // How long between battery voltage updates. Will report garbage when charging
 int battery_poll_interval = 1000 * 10; // ms
