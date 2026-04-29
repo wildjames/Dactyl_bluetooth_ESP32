@@ -33,46 +33,49 @@ static const int WAKE_PINS[] = {33, 13, 14};
 
 HijelHID_BLEKeyboard bleKB("TwoBrownFoxes", "JWILD", 50);
 
-const BoardConfig boardConfig = {
-	"Left half",
-	"TwoBrownFoxes",
-	"TwoBrownFoxes",
-	"JWILD",
-	false,
-	false,
-	true,
-	SERIAL_RX_PIN,
-	SERIAL_TX_PIN,
-	COL_PINS,
-	5,
-	ROW_PINS,
-	7,
-	WAKE_PINS,
-	3,
-	{
-		LED_PIN,
-		5000,
-		8,
-		200,
-	},
-	{
-		A13,
-		3.3,
-		3.2,
-		4.2,
-	},
-	{
-		5,
-		1000,
-		500,
-		1000 * 60 * 2,
-		10,
-		1000 * 60 * 10,
-		1000 * 10,
-		500,
-		1500,
-	},
-};
+inline BoardConfig make_board_config() {
+  BoardConfig config = {};
+
+  config.boardLabel = "Left half";
+  config.bleDeviceName = "TwoBrownFoxes";
+  config.primaryBleName = "TwoBrownFoxes";
+  config.manufacturerName = "JWILD";
+  config.debug = false;
+  config.dummy = false;
+  config.isPrimary = true;
+  config.serialRxPin = SERIAL_RX_PIN;
+  config.serialTxPin = SERIAL_TX_PIN;
+  config.colPins = COL_PINS;
+  config.colCount = 5;
+  config.rowPins = ROW_PINS;
+  config.rowCount = 7;
+  config.wakePins = WAKE_PINS;
+  config.wakeCount = 3;
+
+  config.led.pin = LED_PIN;
+  config.led.frequency = 5000;
+  config.led.resolution = 8;
+  config.led.maxDutyCycle = 200;
+
+  config.battery.pin = A13;
+  config.battery.refVoltage = 3.3;
+  config.battery.minVoltage = 3.2;
+  config.battery.maxVoltage = 4.2;
+
+  config.timings.pollTimeMs = 5;
+  config.timings.doubleTapIntervalMs = 1000;
+  config.timings.disconnectedWaitMs = 500;
+  config.timings.disconnectedDeepSleepMs = 1000 * 60 * 2;
+  config.timings.keyDelayUs = 10;
+  config.timings.deepSleepWaitMs = 1000 * 60 * 10;
+  config.timings.batteryPollIntervalMs = 1000 * 10;
+  config.timings.keepAliveDelayMs = 500;
+  config.timings.keepAliveLifespanMs = 1500;
+
+  return config;
+}
+
+const BoardConfig boardConfig = make_board_config();
 
 // -------------------------------//
 //   END OF USER-EDITABLE STUFF   //
