@@ -40,9 +40,10 @@ inline BoardConfig make_board_config() {
   config.bleDeviceName = "TwoBrownFoxes";
   config.primaryBleName = "TwoBrownFoxes";
   config.manufacturerName = "JWILD";
-  config.debug = false;
+  config.debug = true;
   config.dummy = false;
   config.isPrimary = true;
+  config.enableSerialSplit = false;
   config.serialRxPin = SERIAL_RX_PIN;
   config.serialTxPin = SERIAL_TX_PIN;
   config.colPins = COL_PINS;

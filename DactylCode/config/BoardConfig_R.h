@@ -43,6 +43,7 @@ inline BoardConfig make_board_config() {
   config.debug = false;
   config.dummy = false;
   config.isPrimary = false;
+  config.enableSerialSplit = false;
   config.serialRxPin = SERIAL_RX_PIN;
   config.serialTxPin = SERIAL_TX_PIN;
   config.colPins = COL_PINS;

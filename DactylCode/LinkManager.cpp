@@ -3,6 +3,7 @@
 #include "BoardConfig.h"
 #include "GattRelay.h"
 #include "HidDispatcher.h"
+#include "MatrixScanner.h"
 
 namespace {
 
@@ -69,16 +70,32 @@ void poll_wired_serial(LinkState& state, bool dummy) {
 namespace LinkManager {
 
 void begin(LinkState& state) {
-  if (detect_wired_connection()) {
+  if (boardConfig.enableSerialSplit && detect_wired_connection()) {
     state.splitCommunication = true;
     state.useGatt = false;
-    if (boardConfig.debug) { Serial.println("Connection: WIRED (Serial2)"); }
-    return;
+  } else {
+    state.splitCommunication = false;
+    state.useGatt = true;
+    if (boardConfig.enableSerialSplit) {
+      Serial2.end();
+      MatrixScanner::configure_pins(boardConfig);
+    }
   }
 
-  state.splitCommunication = false;
-  state.useGatt = true;
-  if (boardConfig.debug) { Serial.println("Connection: WIRELESS (GATT)"); }
+  if (boardConfig.debug) {
+    Serial.println(state.splitCommunication ? "Connection: WIRED (Serial2)"
+                                            : "Connection: WIRELESS (GATT)");
+  }
+
+  // Match the pre-refactor init order: first choose transport, then start the
+  // local HID/NimBLE stack for every mode except the wireless secondary.
+  if (!(state.useGatt && !boardConfig.isPrimary)) {
+    HidDispatcher::begin();
+  }
+
+  if (!state.useGatt) {
+    return;
+  }
 
   if (boardConfig.isPrimary) {
     setup_gatt_server();

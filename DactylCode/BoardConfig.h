@@ -43,6 +43,7 @@ struct BoardConfig {
   bool debug;
   bool dummy;
   bool isPrimary;
+  bool enableSerialSplit;
   int serialRxPin;
   int serialTxPin;
   const int* colPins;
