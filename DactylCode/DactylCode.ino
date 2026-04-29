@@ -41,6 +41,7 @@
 // #include "BoardConfig_R.h"
 
 #include "RuntimeState.h"
+#include "MatrixScanner.h"
 
 // Wireless GATT relay between halves (must come after BoardConfig so that
 // bleKB and boardConfig are already declared).
@@ -48,12 +49,6 @@
 
 //******************************************************************
 
-
-// For keeping GPIO high during deep sleep
-#include "soc/rtc_cntl_reg.h"
-#include "soc/rtc.h"
-#include "driver/gpio.h"
-#include "driver/rtc_io.h"
 
 RuntimeState runtimeState = {};
 LinkState& linkState = runtimeState.link;
@@ -67,7 +62,6 @@ const uint8_t release_flag = B11110000;
 // Function declarations
 void initialize_debug_serial();
 void detect_link_mode();
-void configure_matrix_pins();
 void configure_led_pwm();
 void initialize_transport();
 void initialize_runtime_timers();
@@ -77,27 +71,7 @@ void update_connected_led();
 void update_disconnected_led();
 void service_split_link();
 void sleep_if_idle();
-
-
-void release_sleep_matrix_config() {
-  gpio_deep_sleep_hold_dis();
-
-  for (int i = 0; i < boardConfig.rowCount; i++) {
-    gpio_num_t row_pin = (gpio_num_t)boardConfig.rowPins[i];
-    gpio_hold_dis(row_pin);
-    if (rtc_gpio_is_valid_gpio(row_pin)) {
-      rtc_gpio_deinit(row_pin);
-    }
-  }
-
-  for (int i = 0; i < boardConfig.wakeCount; i++) {
-    gpio_num_t wake_pin = (gpio_num_t)boardConfig.wakePins[i];
-    gpio_hold_dis(wake_pin);
-    if (rtc_gpio_is_valid_gpio(wake_pin)) {
-      rtc_gpio_deinit(wake_pin);
-    }
-  }
-}
+void update_modifier_tap_state();
 
 
 void initialize_debug_serial() {
@@ -121,25 +95,6 @@ void detect_link_mode() {
     linkState.splitCommunication = false;
     linkState.useGatt = true;
     if (boardConfig.debug) { Serial.println("Connection: WIRELESS (GATT)"); }
-  }
-}
-
-
-void configure_matrix_pins() {
-  if (boardConfig.debug) { Serial.println("Row nums:"); }
-  for (int i = 0; i < boardConfig.rowCount; i++) {
-    int row_pin = boardConfig.rowPins[i];
-    if (boardConfig.debug) { Serial.println(row_pin); }
-    pinMode(row_pin, OUTPUT);
-    gpio_hold_dis((gpio_num_t)row_pin);
-    digitalWrite(row_pin, LOW);
-  }
-
-  if (boardConfig.debug) { Serial.println("Col nums:"); }
-  for (int i = 0; i < boardConfig.colCount; i++) {
-    int col_pin = boardConfig.colPins[i];
-    if (boardConfig.debug) { Serial.println(col_pin); }
-    pinMode(col_pin, INPUT_PULLDOWN);
   }
 }
 
@@ -261,11 +216,11 @@ void sleep_if_idle() {
 
 
 void setup() {
-  release_sleep_matrix_config();
+  MatrixScanner::release_sleep_matrix_config(boardConfig);
 
   initialize_debug_serial();
   detect_link_mode();
-  configure_matrix_pins();
+  MatrixScanner::configure_pins(boardConfig);
   configure_led_pwm();
   initialize_transport();
   initialize_runtime_timers();
@@ -284,7 +239,8 @@ void loop() {
   bool keyboard_active = keyboard_is_active(primary_has_ble_peer);
 
   if (keyboard_active) {
-    poll_pins();
+    MatrixScanner::scan(boardConfig, runtimeState.matrix);
+    update_modifier_tap_state();
     parse_keypress();
     if (linkState.splitCommunication) { parse_other_half(); }
     update_connected_led();
@@ -348,28 +304,8 @@ void update_battery_level() {
 }
 
 
-void poll_pins() {
+void update_modifier_tap_state() {
   MatrixState& matrix = runtimeState.matrix;
-
-  // Counter for what key we're looking at
-  int k = 0;
-
-  // Loop over and check what the current state is. Store previous state as well.
-  for (int i = 0; i < boardConfig.rowCount; i++) {
-    digitalWrite(boardConfig.rowPins[i], HIGH);
-    for (int j = 0; j < boardConfig.colCount; j++) {
-      bool val = digitalRead(boardConfig.colPins[j]);
-
-      // Store the current and previous key states
-      matrix.previousKeyStates[k] = matrix.keyStates[k];
-      matrix.keyStates[k] = val;
-
-      k++;
-    }
-    digitalWrite(boardConfig.rowPins[i], LOW);
-    delayMicroseconds(boardConfig.timings.keyDelayUs);
-  }
-
 
   // Remember what time we last pressed the modifier key
   if (matrix.previousKeyStates[MODKEY0] and (not matrix.keyStates[MODKEY0])) {
@@ -631,30 +567,13 @@ void go_to_sleep() {
   // Clear the light-sleep timer wakeup so it doesn't fire during deep sleep
   esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_TIMER);
 
-  // Set which column pins can wake the device
-  uint64_t buttonPinMask = 0;
-  for (int i = 0; i < boardConfig.wakeCount; i++) {
-    buttonPinMask |= (1ULL << boardConfig.wakePins[i]);
-  }
+  uint64_t buttonPinMask = MatrixScanner::build_wake_pin_mask(boardConfig);
   if (boardConfig.debug) {
     Serial.print("Button pin mask is: ");
     Serial.println(buttonPinMask);
   }
 
-  // Hold every row high so a pressed key can drive one of the selected wake columns high.
-  for (int i = 0; i < boardConfig.rowCount; i++) {
-    digitalWrite(boardConfig.rowPins[i], HIGH);
-    gpio_hold_en((gpio_num_t)boardConfig.rowPins[i]);
-  }
-  gpio_deep_sleep_hold_en();
-
-  for (int i = 0; i < boardConfig.wakeCount; i++) {
-    gpio_num_t wake_pin = (gpio_num_t)boardConfig.wakePins[i];
-    rtc_gpio_init(wake_pin);
-    rtc_gpio_set_direction(wake_pin, RTC_GPIO_MODE_INPUT_ONLY);
-    rtc_gpio_pullup_dis(wake_pin);
-    rtc_gpio_pulldown_en(wake_pin);
-  }
+  MatrixScanner::prepare_wake_pins(boardConfig);
 
   esp_sleep_enable_ext1_wakeup(buttonPinMask, ESP_EXT1_WAKEUP_ANY_HIGH);
   Serial.println("Going to sleep...");
