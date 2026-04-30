@@ -4,13 +4,14 @@ namespace KeymapResolver {
 
 namespace {
 
-void push_action(Result& result, ActionType type, uint8_t keycode = 0, uint8_t modifier = 0, uint16_t mediaCode = 0) {
+void push_action(Result& result, uint8_t keyIndex, ActionType type, uint8_t keycode = 0, uint8_t modifier = 0, uint16_t mediaCode = 0) {
   if (result.actionCount >= (int)(sizeof(result.actions) / sizeof(result.actions[0]))) {
     return;
   }
 
   Action& action = result.actions[result.actionCount++];
   action.type = type;
+  action.keyIndex = keyIndex;
   action.keycode = keycode;
   action.modifier = modifier;
   action.mediaCode = mediaCode;
@@ -34,7 +35,9 @@ void update_modifier_lock(MatrixState& matrixState, KeyboardState& keyboardState
   if (config.modifierKeyIndex >= 0
       && matrixState.previousKeyStates[config.modifierKeyIndex]
       && !matrixState.keyStates[config.modifierKeyIndex]) {
-    if ((millis() - keyboardState.lastModTap) < (unsigned long)config.doubleTapIntervalMs) {
+    unsigned long modTapSeparationMs = millis() - keyboardState.lastModTap;
+    if (modTapSeparationMs >= (unsigned long)config.doubleTapMinIntervalMs
+        && modTapSeparationMs < (unsigned long)config.doubleTapIntervalMs) {
       keyboardState.lockedModKey = !keyboardState.lockedModKey;
       keyboardState.lastModTap -= config.doubleTapIntervalMs;
     } else {
@@ -45,8 +48,10 @@ void update_modifier_lock(MatrixState& matrixState, KeyboardState& keyboardState
   if (config.shiftKeyIndex >= 0
       && matrixState.previousKeyStates[config.shiftKeyIndex]
       && !matrixState.keyStates[config.shiftKeyIndex]) {
-    if ((millis() - keyboardState.lastShiftTap) < (unsigned long)config.doubleTapIntervalMs) {
-      push_action(result, ActionType::TapCapsLock);
+    unsigned long shiftTapSeparationMs = millis() - keyboardState.lastShiftTap;
+    if (shiftTapSeparationMs >= (unsigned long)config.doubleTapMinIntervalMs
+        && shiftTapSeparationMs < (unsigned long)config.doubleTapIntervalMs) {
+      push_action(result, config.shiftKeyIndex, ActionType::TapCapsLock);
       keyboardState.lastShiftTap -= config.doubleTapIntervalMs;
     } else {
       keyboardState.lastShiftTap = millis();
@@ -59,7 +64,7 @@ bool handle_layout_toggle(MatrixState& matrixState, KeyboardState& keyboardState
     if (config.typingToggleKeyIndex >= 0 && matrixState.keyStates[config.typingToggleKeyIndex]) {
       keyboardState.isAltLayout = false;
       matrixState.previousKeyStates[config.typingToggleKeyIndex] = 1;
-      push_action(result, ActionType::ReleaseAll);
+      push_action(result, config.typingToggleKeyIndex, ActionType::ReleaseAll);
       return true;
     }
     return false;
@@ -67,7 +72,7 @@ bool handle_layout_toggle(MatrixState& matrixState, KeyboardState& keyboardState
 
   if (config.altToggleKeyIndex >= 0 && matrixState.keyStates[config.altToggleKeyIndex]) {
     keyboardState.isAltLayout = true;
-    push_action(result, ActionType::ReleaseAll);
+    push_action(result, config.altToggleKeyIndex, ActionType::ReleaseAll);
     return true;
   }
 
@@ -90,12 +95,13 @@ void append_release_for_alternate_layer(int pressedIndex, const MatrixState& mat
 
   if (alternateLetterIndex < -1) {
     alternateLetterIndex *= -1;
-    push_action(result, ActionType::MediaRelease, 0, 0, config.mediaKeys[alternateLetterIndex]);
+    push_action(result, alternateIndex, ActionType::MediaRelease, 0, 0, config.mediaKeys[alternateLetterIndex]);
     return;
   }
 
   push_action(
     result,
+    alternateIndex,
     ActionType::KeyRelease,
     config.keycodes[alternateLetterIndex],
     config.keyModifiers[alternateLetterIndex]
@@ -138,13 +144,14 @@ void resolve(MatrixState& matrixState, KeyboardState& keyboardState, const Confi
 
       if (letterIndex < -1) {
         letterIndex *= -1;
-        push_action(result, ActionType::MediaTap, 0, 0, config.mediaKeys[letterIndex]);
+        push_action(result, pressedIndex, ActionType::MediaTap, 0, 0, config.mediaKeys[letterIndex]);
         continue;
       }
 
       keyboardState.lastKeypress = millis();
       push_action(
         result,
+        pressedIndex,
         ActionType::KeyPress,
         config.keycodes[letterIndex],
         config.keyModifiers[letterIndex]
@@ -164,12 +171,13 @@ void resolve(MatrixState& matrixState, KeyboardState& keyboardState, const Confi
 
       if (letterIndex < -1) {
         letterIndex *= -1;
-        push_action(result, ActionType::MediaRelease, 0, 0, config.mediaKeys[letterIndex]);
+        push_action(result, pressedIndex, ActionType::MediaRelease, 0, 0, config.mediaKeys[letterIndex]);
         continue;
       }
 
       push_action(
         result,
+        pressedIndex,
         ActionType::KeyRelease,
         config.keycodes[letterIndex],
         config.keyModifiers[letterIndex]

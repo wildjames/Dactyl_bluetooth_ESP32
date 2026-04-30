@@ -37,8 +37,8 @@
 //******************************************************************
 
 // board-specific info in a header file. Make sure to change this!
-// #include "config/BoardConfig_L.h"
-#include "config/BoardConfig_R.h"
+#include "config/BoardConfig_L.h"
+// #include "config/BoardConfig_R.h"
 
 #include "RuntimeState.h"
 #include "MatrixScanner.h"
@@ -71,6 +71,7 @@ KeymapResolver::Config make_keymap_resolver_config() {
   config.altToggleKeyIndex = alt_toggle;
   config.typingToggleKeyIndex = typing_toggle;
   config.doubleTapIntervalMs = boardConfig.timings.doubleTapIntervalMs;
+  config.doubleTapMinIntervalMs = boardConfig.timings.doubleTapMinIntervalMs;
   config.primaryKeymap = keymap;
   config.primaryKeymapLength = sizeof(keymap) / sizeof(keymap[0]);
   config.alternateKeymap = alt_keymap;
@@ -139,6 +140,17 @@ void loop() {
 
   if (keyboard_active) {
     MatrixScanner::scan(boardConfig, runtimeState.matrix);
+
+    // if debugging, print any newly pressed keys
+    if (boardConfig.debug) {
+      for (int i = 0; i < MATRIX_KEY_COUNT; i++) {
+        if (runtimeState.matrix.keyStates[i] && !runtimeState.matrix.previousKeyStates[i]) {
+          Serial.print("Key pressed: ");
+          Serial.println(i);
+        }
+      }
+    }
+
     KeymapResolver::Result keymapResult = {};
     KeymapResolver::resolve(runtimeState.matrix, keyboardState, keymapResolverConfig, keymapResult);
     dispatch_keymap_result(keymapResult);
@@ -177,6 +189,20 @@ void loop() {
 
 void dispatch_keymap_result(const KeymapResolver::Result& result) {
   for (int i = 0; i < result.actionCount; i++) {
+    if (boardConfig.debug) {
+      Serial.print("Dispatching action ");
+      Serial.print(i+1);
+      Serial.print("/");
+      Serial.print(result.actionCount);
+      Serial.print(": type=");
+      Serial.print((int)result.actions[i].type);
+      Serial.print(", keyIndex=");
+      Serial.print(result.actions[i].keyIndex);
+      Serial.print(", keycode=");
+      Serial.print(result.actions[i].keycode);
+      Serial.print(", modifier=");
+      Serial.println(result.actions[i].modifier);
+    }
     dispatch_keymap_action(result.actions[i]);
   }
 }

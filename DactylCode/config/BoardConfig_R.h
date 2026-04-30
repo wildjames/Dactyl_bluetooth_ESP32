@@ -65,6 +65,7 @@ inline BoardConfig make_board_config() {
 
   config.timings.pollTimeMs = 5;
   config.timings.doubleTapIntervalMs = 1000;
+  config.timings.doubleTapMinIntervalMs = 100;
   config.timings.disconnectedWaitMs = 500;
   config.timings.disconnectedDeepSleepMs = 1000 * 60 * 2;
   config.timings.keyDelayUs = 10;

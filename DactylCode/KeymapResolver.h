@@ -26,6 +26,7 @@ struct KeyboardState {
 
 struct Action {
   ActionType type = ActionType::None;
+  uint8_t keyIndex = 0;
   uint8_t keycode = 0;
   uint8_t modifier = 0;
   uint16_t mediaCode = 0;
@@ -37,6 +38,7 @@ struct Config {
   int altToggleKeyIndex = -1;
   int typingToggleKeyIndex = -1;
   int doubleTapIntervalMs = 0;
+  int doubleTapMinIntervalMs = 0;
   const int* primaryKeymap = nullptr;
   int primaryKeymapLength = 0;
   const int* alternateKeymap = nullptr;

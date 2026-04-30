@@ -26,6 +26,7 @@ struct BatteryConfig {
 struct TimingConfig {
   int pollTimeMs;
   int doubleTapIntervalMs;
+  int doubleTapMinIntervalMs;
   int disconnectedWaitMs;
   int disconnectedDeepSleepMs;
   int keyDelayUs;
