@@ -17,7 +17,9 @@ void update_battery_level(const BoardConfig& config, const LinkState& linkState,
   if (battery_percentage > 100.0f) { battery_percentage = 100.0f; }
   if (battery_percentage < 0.0f) { battery_percentage = 0.0f; }
 
-  if (!(linkState.useGatt && !config.isPrimary)) {
+  // The primary sends its battery level to the host. But, what about the secondary?
+  // TODO: come up with a solution
+  if (config.isPrimary) {
     HidDispatcher::set_battery_level(battery_percentage);
   }
 
@@ -40,7 +42,7 @@ void enter_deep_sleep(const BoardConfig& config, LedState& ledState) {
   MatrixScanner::prepare_wake_pins(config);
 
   esp_sleep_enable_ext1_wakeup(buttonPinMask, ESP_EXT1_WAKEUP_ANY_HIGH);
-  Serial.println("Going to sleep...");
+  if (config.debug) { Serial.println("Going to sleep..."); }
 
   esp_deep_sleep_start();
 }

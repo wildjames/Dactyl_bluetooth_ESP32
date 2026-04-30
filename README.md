@@ -13,14 +13,15 @@ Note that at time of writing, a bug in the library I use to handle the bluetooth
 
 ## Broad board overview
 
-Each half uses an ESP32 to handle all the thinking, and both halves independantly send their keystrokes to a connected device over bluetooth.
-Notably, I've built in the option for inter-keyboard communication and sending keystrokes only from a primary half. This would let you use a modifier on one half to access a layer on the opposing half, which some people like.
-For my usecase, this isn't necessary and I've repurposed the communication wire to share a charging current between the two keyboards - i.e. if one half is plugged in and charging, and the other half is connected to the first, it will also charge.
+Each half uses an ESP32 to handle all the thinking, with the two halves pairing wirelessly over BLE so the primary half can forward key events from the secondary.
+I've repurposed the communication wire to share a charging current between the two keyboards - i.e. if one half is plugged in and charging, and the other half is connected to the first, it will also charge.
 There's also a single alternate layer modifier key built in for each half, but I left it at one additional layer because I can never remember any more than that. Finally, there's a toggle-able layer that can be accessed from a chosen key, for alternate layouts, e.g. a QWERTY/Dvorak toggle key.
 
 I initially used plain old ESP32 dev boards, but the cheap breakout battery circuit I had drew far too much current even when the controller was asleep. I caved and used a couple of Feather HUZZAH32 instead. If you're making this project, I'd recommend the same! It's not best deep sleep current draw, but off my 4000mAh batteries I get standby times in the ~month range. Plus, Adafruit sacrifice an analog pin for battery monitoring with no extra work on your behalf, so updating your battery level is trivial.
 
 I used some RJ9 connectors to join the halves, and USB-C to supply current/USB to the controllers, though note that keystrokes are **never** sent over USB!
+
+UPDATE: I'm moving to these boards: https://learn.adafruit.com/adafruit-esp32-s3-feather/pinouts
 
 ## Tayloring the code for yourself
 

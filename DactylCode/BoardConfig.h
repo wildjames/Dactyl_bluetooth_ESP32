@@ -32,8 +32,6 @@ struct TimingConfig {
   int keyDelayUs;
   int deepSleepWaitMs;
   int batteryPollIntervalMs;
-  int keepAliveDelayMs;
-  int keepAliveLifespanMs;
 };
 
 struct BoardConfig {
@@ -44,9 +42,6 @@ struct BoardConfig {
   bool debug;
   bool dummy;
   bool isPrimary;
-  bool enableSerialSplit;
-  int serialRxPin;
-  int serialTxPin;
   const int* colPins;
   int colCount;
   const int* rowPins;

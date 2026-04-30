@@ -1,36 +1,3 @@
-// TODO:
-// [DONE] recognise keypresses and releases consistently
-// [DONE] make Bluetooth keyboard work
-// [DONE] Hook keypresses into bluetooth keyboard
-// [DONE] Make a keymap
-// [DONE] impliment layers to the keyboard
-// [DONE] communication between two ESP32 down the jack
-// [DONE] make the left keyboard pass on keystrokes from the right one
-// [DONE] The two halves need to communicate when they are plugged
-//   - send a keep-alive message every second or so, if it's missed we're no longer
-//     connected.~
-//   - Code for this is implemented, but I don't really know what to do between the boards.
-//     Might have been better as a way to share power delivery? dunno. Since layers are localised
-//     to each board anyway, the modifier states don't need to be shared. Unsure if there
-//     might be a latency improvement if only one BT device is sending keys? not sure how to test. I doubt it would be significant.
-// [DONE] report battery level of the keyboard halves
-// The layout needs optimising.
-// [DONE] Remove game mode, I dont need it.
-//   - I made it an optional toggle in the config files
-// [DONE]Rewire the connecting cable so that the two halves can share a charging current.
-//   - Check if the cable is thick enough to carry 500mA (YES)
-//   - Make this so that it connects the *chargers*, not the *batteries*. If two batteries
-//     of different voltage are connected, they'll equalise very quickly and probably saturate their max current
-//     which could start a fire!
-//   - The charging boards to provide input pads - could likely solder them together?
-// [DONE] dim leds with some strobing
-// [DONE] Add  double tap to lock the modifier
-// [DONE] double tap to lock shift to caps?
-// [DONE] light sleep between loops, if theres time
-
-// [TODO] Detect if we are plugged in to another half, and dynamically switch to the connected mode
-
-
 #include <HijelHID_BLEKeyboard.h>
 
 
@@ -100,12 +67,11 @@ void initialize_runtime_timers() {
   unsigned long now = millis();
   keyboardState.lastModTap = now;
   keyboardState.lastKeypress = now;
-  linkState.lastKeepAliveCheck = now;
   runtimeState.loop.lastLoop = now;
 }
 
 bool keyboard_is_active(bool primary_has_ble_peer) {
-  bool is_wireless_secondary = linkState.useGatt && !boardConfig.isPrimary;
+  bool is_wireless_secondary = linkState.allowGatt && !boardConfig.isPrimary;
   bool has_primary_ble_link = HidDispatcher::has_host_connection();
   bool can_primary_send_keys = has_primary_ble_link || primary_has_ble_peer;
 
@@ -208,7 +174,7 @@ void dispatch_keymap_result(const KeymapResolver::Result& result) {
 }
 
 void dispatch_keymap_action(const KeymapResolver::Action& action) {
-  bool use_local_hid = boardConfig.isPrimary || (!linkState.useGatt && !linkState.isConnected);
+  bool use_local_hid = boardConfig.isPrimary || (!linkState.allowGatt && !linkState.isConnected);
 
   switch (action.type) {
     case KeymapResolver::ActionType::None:

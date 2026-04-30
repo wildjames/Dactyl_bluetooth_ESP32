@@ -2,11 +2,7 @@
 //
 // Wireless inter-half communication via a custom BLE GATT service.
 //
-// At boot, both halves attempt a Serial2 handshake to decide which transport to use:
-//   - Cable detected  → split_keeb_communication = true  (existing Serial2 path)
-//   - No cable        → use_gatt = true
-//
-// In GATT mode:
+// The halves always use GATT mode:
 //   Primary   - adds a custom relay service to the NimBLE server that bleKB already owns.
 //               The secondary half connects and writes key events; the primary forwards them via bleKB.
 //   Secondary - does NOT call bleKB.begin(). Instead it initialises NimBLE as a central,
@@ -33,59 +29,12 @@
 #define GATT_KEY_RELEASE 0x00
 #define GATT_MEDIA_KEY   0x02
 
-// ── Boot-time wire-detection ──────────────────────────────────────────────────
-#define WIRE_DETECT_SYNC          0xAA
-#define WIRE_DETECT_ACK           0x55
-#define WIRE_DETECT_TIMEOUT_MS    500   // total window (ms)
-#define WIRE_DETECT_PING_INTERVAL 20    // ms between primary-half SYNC pings
-
 #define GATT_SCAN_BURST_MS        750   // ms per discovery pass before attempting connect
 #define GATT_RETRY_DELAY_MS       100   // ms between scan retries when nothing is found
 #define GATT_CONNECT_TIMEOUT_MS   2000  // ms before abandoning a connection attempt
 
 // Shared runtime link state defined in DactylCode.ino.
 extern LinkState& linkState;
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Boot-time detection
-// ─────────────────────────────────────────────────────────────────────────────
-// Opens Serial2 and exchanges a SYNC/ACK handshake.
-// Returns true  → halves are wired; caller should set split_keeb_communication=true.
-// Returns false → halves are not wired; caller should set use_gatt=true.
-// Serial2 is left open so the wired path can use it immediately.
-bool detect_wired_connection() {
-  Serial2.begin(115200, SERIAL_8N1, boardConfig.serialRxPin, boardConfig.serialTxPin);
-
-  unsigned long deadline = millis() + WIRE_DETECT_TIMEOUT_MS;
-
-  if (boardConfig.isPrimary) {
-    // Primary half: ping SYNC repeatedly; return true the moment it gets ACK.
-    while (millis() < deadline) {
-      Serial2.write((uint8_t)WIRE_DETECT_SYNC);
-      unsigned long ping_end = millis() + WIRE_DETECT_PING_INTERVAL;
-      while (millis() < ping_end) {
-        if (Serial2.available() && Serial2.read() == WIRE_DETECT_ACK) {
-          if (boardConfig.debug) { Serial.println("[DETECT] Wired: ACK received"); }
-          return true;
-        }
-      }
-    }
-    if (boardConfig.debug) { Serial.println("[DETECT] No ACK — going wireless"); }
-    return false;
-
-  } else {
-    // Secondary half: wait for SYNC, reply with ACK, return true.
-    while (millis() < deadline) {
-      if (Serial2.available() && Serial2.read() == WIRE_DETECT_SYNC) {
-        Serial2.write((uint8_t)WIRE_DETECT_ACK);
-        if (boardConfig.debug) { Serial.println("[DETECT] Wired: SYNC received"); }
-        return true;
-      }
-    }
-    if (boardConfig.debug) { Serial.println("[DETECT] No SYNC — going wireless"); }
-    return false;
-  }
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Primary half: GATT relay server

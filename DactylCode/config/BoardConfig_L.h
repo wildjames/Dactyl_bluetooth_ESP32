@@ -9,10 +9,6 @@
 
 // PINS!
 
-// Software Serial pins
-static const int SERIAL_RX_PIN = 16;
-static const int SERIAL_TX_PIN = 17;
-
 // Status LED
 static const int LED_PIN = 21;
 
@@ -43,9 +39,6 @@ inline BoardConfig make_board_config() {
   config.debug = false;
   config.dummy = false;
   config.isPrimary = true;
-  config.enableSerialSplit = false;
-  config.serialRxPin = SERIAL_RX_PIN;
-  config.serialTxPin = SERIAL_TX_PIN;
   config.colPins = COL_PINS;
   config.colCount = 5;
   config.rowPins = ROW_PINS;
@@ -71,8 +64,6 @@ inline BoardConfig make_board_config() {
   config.timings.keyDelayUs = 10;
   config.timings.deepSleepWaitMs = 1000 * 60 * 10;
   config.timings.batteryPollIntervalMs = 1000 * 10;
-  config.timings.keepAliveDelayMs = 500;
-  config.timings.keepAliveLifespanMs = 1500;
 
   return config;
 }

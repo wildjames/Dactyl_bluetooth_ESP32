@@ -11,12 +11,8 @@ struct MatrixState {
 };
 
 struct LinkState {
-  bool splitCommunication = false;
-  bool useGatt = false;
+  bool allowGatt = false;
   bool isConnected = false;
-  int keepAliveMessage = 50;
-  unsigned long lastKeepAliveCheck = 0;
-  unsigned long lastKeepAliveTime = 0;
   uint8_t lastGattConnectedCount = 0;
 };
 
