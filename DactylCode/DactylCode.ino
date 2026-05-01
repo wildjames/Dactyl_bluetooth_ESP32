@@ -43,7 +43,6 @@ KeymapResolver::Config make_keymap_resolver_config() {
   config.primaryKeymapLength = sizeof(keymap) / sizeof(keymap[0]);
   config.alternateKeymap = alt_keymap;
   config.alternateKeymapLength = sizeof(alt_keymap) / sizeof(alt_keymap[0]);
-  config.mediaKeys = media_keys;
   return config;
 }
 
@@ -181,18 +180,10 @@ void dispatch_keymap_action(const KeymapResolver::Action& action) {
     // These actions are local to the board and don't need to be forwarded
     case KeymapResolver::ActionType::ReleaseAll:
     case KeymapResolver::ActionType::TapCapsLock:
-    case KeymapResolver::ActionType::MediaTap:
       if (use_local_hid) {
         HidDispatcher::dispatch_action(action, boardConfig.dummy);
       } else {
         LinkManager::dispatch_remote_action(action, linkState);
-      }
-      return;
-
-    // Key presses that need to be forwarded to the primary, or sent to the host if we're the primary
-    case KeymapResolver::ActionType::MediaRelease:
-      if (use_local_hid) {
-        HidDispatcher::dispatch_action(action, boardConfig.dummy);
       }
       return;
 

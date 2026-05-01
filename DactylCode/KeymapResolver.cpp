@@ -4,7 +4,7 @@ namespace KeymapResolver {
 
 namespace {
 
-void push_action(Result& result, uint8_t keyIndex, ActionType type, uint8_t keycode = 0, uint16_t mediaCode = 0) {
+void push_action(Result& result, uint8_t keyIndex, ActionType type, uint8_t keycode = 0) {
   if (result.actionCount >= (int)(sizeof(result.actions) / sizeof(result.actions[0]))) {
     return;
   }
@@ -13,7 +13,6 @@ void push_action(Result& result, uint8_t keyIndex, ActionType type, uint8_t keyc
   action.type = type;
   action.keyIndex = keyIndex;
   action.keycode = keycode;
-  action.mediaCode = mediaCode;
 }
 
 bool within_keymap_bounds(int index, int keymapLength) {
@@ -50,7 +49,7 @@ void update_modifier_lock(MatrixState& matrixState, KeyboardState& keyboardState
     unsigned long shiftTapSeparationMs = millis() - keyboardState.lastShiftTap;
     if (shiftTapSeparationMs >= (unsigned long)config.doubleTapMinIntervalMs
         && shiftTapSeparationMs < (unsigned long)config.doubleTapIntervalMs) {
-      push_action(result, config.shiftKeyIndex, ActionType::TapCapsLock);
+      push_action(result, config.shiftKeyIndex, ActionType::TapCapsLock); // TODO: This should use the tap action
       keyboardState.lastShiftTap -= config.doubleTapIntervalMs;
     } else {
       keyboardState.lastShiftTap = millis();
@@ -87,22 +86,23 @@ void append_release_for_alternate_layer(int pressedIndex, const MatrixState& mat
     return;
   }
 
-  int alternateLetterIndex = keymap[alternateIndex];
-  if (alternateLetterIndex == -1) {
+  int alternateKeyCode = keymap[alternateIndex];
+  if (alternateKeyCode == -1) {
     return;
   }
 
-  if (alternateLetterIndex < -1) {
-    alternateLetterIndex *= -1;
-    push_action(result, alternateIndex, ActionType::MediaRelease, 0, config.mediaKeys[alternateLetterIndex]);
-    return;
-  }
+  // TODO: Refactor this alongside the tap handling in resolve()
+  // if (alternateKeyCode < -1) {
+  //   alternateKeyCode *= -1;
+  //   push_action(result, alternateIndex, ActionType::KeyRelease, 0);
+  //   return;
+  // }
 
   push_action(
     result,
     alternateIndex,
     ActionType::KeyRelease,
-    (uint8_t)alternateLetterIndex
+    (uint8_t)alternateKeyCode
   );
 }
 
@@ -135,23 +135,26 @@ void resolve(MatrixState& matrixState, KeyboardState& keyboardState, const Confi
         continue;
       }
 
-      int letterIndex = activeKeymap[pressedIndex];
-      if (letterIndex == -1) {
+      int keyCode = activeKeymap[pressedIndex];
+      if (keyCode == -1) {
         continue;
       }
 
-      if (letterIndex < -1) {
-        letterIndex *= -1;
-        push_action(result, pressedIndex, ActionType::MediaTap, 0, config.mediaKeys[letterIndex]);
-        continue;
-      }
+      // TODO
+      // I need to think about how to define that a key should be tapped instead of pressed.
+      // The negative index worked for a separate array of media keys, but it's not the right solution anymore.
+      // if (keyCode < -1) {
+      //   keyCode *= -1;
+      //   push_action(result, pressedIndex, ActionType::KeyTap, 0);
+      //   continue;
+      // }
 
       keyboardState.lastKeypress = millis();
       push_action(
         result,
         pressedIndex,
         ActionType::KeyPress,
-        (uint8_t)letterIndex
+        (uint8_t)keyCode
       );
     }
 
@@ -161,14 +164,8 @@ void resolve(MatrixState& matrixState, KeyboardState& keyboardState, const Confi
         continue;
       }
 
-      int letterIndex = activeKeymap[pressedIndex];
-      if (letterIndex == -1) {
-        continue;
-      }
-
-      if (letterIndex < -1) {
-        letterIndex *= -1;
-        push_action(result, pressedIndex, ActionType::MediaRelease, 0, config.mediaKeys[letterIndex]);
+      int keyCode = activeKeymap[pressedIndex];
+      if (keyCode == -1) {
         continue;
       }
 
@@ -176,7 +173,7 @@ void resolve(MatrixState& matrixState, KeyboardState& keyboardState, const Confi
         result,
         pressedIndex,
         ActionType::KeyRelease,
-        (uint8_t)letterIndex
+        (uint8_t)keyCode
       );
       if (config.modifierKeyIndex >= 0) {
         append_release_for_alternate_layer(pressedIndex, matrixState, keyboardState, config, activeKeymap, keymapLength, result);

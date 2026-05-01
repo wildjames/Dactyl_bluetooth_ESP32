@@ -12,8 +12,7 @@ enum class ActionType {
   TapCapsLock,
   KeyPress,
   KeyRelease,
-  MediaTap,
-  MediaRelease,
+  KeyTap,
 };
 
 struct KeyboardState {
@@ -28,7 +27,6 @@ struct Action {
   ActionType type = ActionType::None;
   uint8_t keyIndex = 0;
   uint8_t keycode = 0;
-  uint16_t mediaCode = 0;
 };
 
 struct Config {
@@ -42,7 +40,6 @@ struct Config {
   int primaryKeymapLength = 0;
   const int* alternateKeymap = nullptr;
   int alternateKeymapLength = 0;
-  const uint16_t* mediaKeys = nullptr;
 };
 
 struct Result {

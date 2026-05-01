@@ -85,8 +85,8 @@ bool has_primary_ble_peer() {
 bool dispatch_remote_action(const KeymapResolver::Action& action, const LinkState& state) {
   if (state.allowGatt) {
     switch (action.type) {
-      case KeymapResolver::ActionType::MediaTap:
-        gatt_send_media_key(action.mediaCode);
+      case KeymapResolver::ActionType::KeyTap:
+        gatt_send_tap_key(action.keycode);
         return true;
 
       case KeymapResolver::ActionType::KeyPress:
@@ -100,7 +100,6 @@ bool dispatch_remote_action(const KeymapResolver::Action& action, const LinkStat
       case KeymapResolver::ActionType::None:
       case KeymapResolver::ActionType::ReleaseAll:
       case KeymapResolver::ActionType::TapCapsLock:
-      case KeymapResolver::ActionType::MediaRelease:
         return false;
     }
   }

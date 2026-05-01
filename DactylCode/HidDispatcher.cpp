@@ -22,20 +22,12 @@ void tap_caps_lock() {
   bleKB.tap(KEY_CAPS_LOCK);
 }
 
-void tap_media(uint16_t mediaCode, bool dummy) {
+void tap_key(uint16_t keyCode, bool dummy) {
   if (dummy) {
     return;
   }
 
-  bleKB.tap(mediaCode);
-}
-
-void release_media(uint16_t mediaCode, bool dummy) {
-  if (dummy) {
-    return;
-  }
-
-  bleKB.release(mediaCode);
+  bleKB.tap(keyCode);
 }
 
 void press_key(uint8_t keycode, bool dummy) {
@@ -77,14 +69,6 @@ void dispatch_action(const KeymapResolver::Action& action, bool dummy) {
 
     case KeymapResolver::ActionType::TapCapsLock:
       tap_caps_lock();
-      return;
-
-    case KeymapResolver::ActionType::MediaTap:
-      tap_media(action.mediaCode, dummy);
-      return;
-
-    case KeymapResolver::ActionType::MediaRelease:
-      release_media(action.mediaCode, dummy);
       return;
 
     case KeymapResolver::ActionType::KeyPress:
