@@ -43,7 +43,6 @@ struct BoardConfig {
   int wakeCount;
   bool enableBatteryMonitoring;
   LedConfig led;
-  BatteryConfig battery;
   TimingConfig timings;
 };
 
