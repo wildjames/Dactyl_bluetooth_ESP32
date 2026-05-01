@@ -51,6 +51,11 @@ class KeyEventCallbacks : public NimBLECharacteristicCallbacks {
     uint8_t b1      = (uint8_t)val[1];
     uint8_t b2      = (val.length() >= 3) ? (uint8_t)val[2] : 0;
 
+    if (evt == GATT_BATTERY_LEVEL) {
+      runtimeState.battery.companionPercentage = (float)b1;
+      return;
+    }
+
     if (boardConfig.dummy) return;
 
     if (evt == GATT_KEY_PRESS) {
@@ -74,7 +79,7 @@ class KeyEventCallbacks : public NimBLECharacteristicCallbacks {
 // bleKB.begin() has already initialised the NimBLE stack; we retrieve the
 // existing server and attach the relay service to it.
 // We do NOT touch advertising or server callbacks here — bleKB owns those.
-void setup_gatt_server() {
+inline void setup_gatt_server() {
   NimBLEServer* pServer = NimBLEDevice::getServer();
   if (pServer == nullptr) {
     pServer = NimBLEDevice::createServer();
@@ -128,7 +133,7 @@ class GattClientCallbacks : public NimBLEClientCallbacks {
 // directly as a central (no HID advertising).
 // Blocks until the primary half is found and connected (retries indefinitely).
 // Returns true once connected; never returns false.
-bool connect_to_primary_gatt() {
+inline bool connect_to_primary_gatt() {
   if (!NimBLEDevice::isInitialized()) {
     NimBLEDevice::init("");         // Init BLE without HID
     NimBLEDevice::setPower(ESP_PWR_LVL_P9);
@@ -207,22 +212,49 @@ bool connect_to_primary_gatt() {
 }
 
 // ── Send helpers called from the key event dispatch path ─────────────────────
-void gatt_send_key_press(uint8_t keycode) {
+inline void gatt_send_key_press(uint8_t keycode) {
   if (!gatt_client_ready || !pRemoteKeyChar) return;
   uint8_t data[2] = { GATT_KEY_PRESS, keycode };
   pRemoteKeyChar->writeValue(data, 2, false);
 }
 
-void gatt_send_key_release(uint8_t keycode) {
+inline void gatt_send_key_release(uint8_t keycode) {
   if (!gatt_client_ready || !pRemoteKeyChar) return;
   uint8_t data[2] = { GATT_KEY_RELEASE, keycode };
   pRemoteKeyChar->writeValue(data, 2, false);
 }
 
-void gatt_send_tap_key(uint16_t keyCode) {
+inline void gatt_send_tap_key(uint16_t keyCode) {
   if (!gatt_client_ready || !pRemoteKeyChar) return;
   uint8_t data[3] = { GATT_KEY_TAP,
                       (uint8_t)(keyCode & 0xFF),
                       (uint8_t)(keyCode >> 8) };
   pRemoteKeyChar->writeValue(data, 3, false);
+}
+
+// Secondary sends its battery percentage to the primary via the relay characteristic.
+inline void gatt_send_battery_level(uint8_t percentage) {
+  if (!gatt_client_ready || !pRemoteKeyChar) return;
+  uint8_t data[2] = { GATT_BATTERY_LEVEL, percentage };
+  pRemoteKeyChar->writeValue(data, 2, false);
+}
+
+// Primary updates the scan response to advertise both battery levels.
+// Encodes levels as manufacturer-specific data (company ID 0xFFFF = test/unassigned).
+inline void update_battery_scan_response(uint8_t primaryPct, uint8_t companionPct) {
+  NimBLEAdvertising* pAdv = NimBLEDevice::getAdvertising();
+  if (pAdv == nullptr) return;
+
+  NimBLEAdvertisementData scanResponse;
+  scanResponse.setName(boardConfig.primaryBleName);
+
+  // Manufacturer data: [companyID_lo, companyID_hi, primaryBattery, companionBattery]
+  std::string mfgData;
+  mfgData += (char)0xFF;  // company ID low byte (0xFFFF = unassigned/test)
+  mfgData += (char)0xFF;  // company ID high byte
+  mfgData += (char)primaryPct;
+  mfgData += (char)companionPct;
+  scanResponse.setManufacturerData(mfgData);
+
+  pAdv->setScanResponseData(scanResponse);
 }

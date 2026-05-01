@@ -21,6 +21,7 @@ struct BatteryState {
   float voltage = NAN;
   float percentage = NAN;
   float chargeRate = NAN;
+  float companionPercentage = NAN;
   unsigned long lastUpdate = 0;
 };
 

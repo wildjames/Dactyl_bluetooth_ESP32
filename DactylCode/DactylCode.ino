@@ -4,8 +4,8 @@
 //******************************************************************
 
 // board-specific info in a header file. Make sure to change this!
-// #include "config/BoardConfig_L.h"
-#include "config/BoardConfig_R.h"
+#include "config/BoardConfig_L.h"
+// #include "config/BoardConfig_R.h"
 
 #include "RuntimeState.h"
 #include "MatrixScanner.h"

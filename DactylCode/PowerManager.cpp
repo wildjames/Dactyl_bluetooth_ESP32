@@ -4,6 +4,7 @@
 #include <Wire.h>
 #include <esp_sleep.h>
 
+#include "GattRelay.h"
 #include "HidDispatcher.h"
 #include "MatrixScanner.h"
 #include "StatusLed.h"
@@ -37,14 +38,6 @@ void enable_i2c_power() {
 namespace PowerManager {
 
 void begin(const BoardConfig& config, BatteryState& batteryState) {
-  if (!config.enableBatteryMonitoring) {
-    if (config.debug) {
-      Serial.println("Battery monitoring disabled in config");
-    }
-    mark_battery_unavailable(batteryState);
-    return;
-  }
-
   enable_i2c_power();
 
   if (batteryMonitorInitialized) {
@@ -72,8 +65,6 @@ void begin(const BoardConfig& config, BatteryState& batteryState) {
 }
 
 void update_battery_level(const BoardConfig& config, const LinkState& linkState, BatteryState& batteryState) {
-  (void)linkState;
-
   if (!batteryMonitorInitialized) {
     begin(config, batteryState);
   }
@@ -100,10 +91,21 @@ void update_battery_level(const BoardConfig& config, const LinkState& linkState,
   batteryState.percentage = battery_percentage;
   batteryState.chargeRate = battery_charge_rate;
 
-  // The primary sends its battery level to the host. But, what about the secondary?
-  // TODO: come up with a solution
   if (config.isPrimary) {
-    HidDispatcher::set_battery_level(battery_percentage);
+    // Report the minimum of both halves so Windows shows the worst-case level.
+    float reportedLevel = battery_percentage;
+    if (!isnan(batteryState.companionPercentage) && batteryState.companionPercentage < reportedLevel) {
+      reportedLevel = batteryState.companionPercentage;
+    }
+    HidDispatcher::set_battery_level(reportedLevel);
+
+    uint8_t primaryPct = (uint8_t)battery_percentage;
+    uint8_t companionPct = isnan(batteryState.companionPercentage)
+                             ? 0xFF
+                             : (uint8_t)batteryState.companionPercentage;
+    update_battery_scan_response(primaryPct, companionPct);
+  } else if (linkState.isConnected) {
+    gatt_send_battery_level((uint8_t)battery_percentage);
   }
 
   batteryState.lastUpdate = millis();
