@@ -22,13 +22,13 @@
 #define KEY_EVENT_CHAR_UUID "BEB5483E-36E1-4688-B7F5-EA07361B26A8"
 
 // ── GATT packet format: [event_type, byte1, (byte2)] ────────────────────────
-//   Regular key press:   GATT_KEY_PRESS,   keycode
-//   Regular key release: GATT_KEY_RELEASE, keycode
-//   Media key tap:       GATT_MEDIA_KEY,   mediacode_low,    mediacode_high
+//   key press:   GATT_KEY_PRESS,   keycode
+//   key release: GATT_KEY_RELEASE, keycode
+//   key tap:     GATT_KEY_TAP,     keycode_low, keycode_high
 //   Battery update:      GATT_BATTERY_LEVEL, percentage_or_0xFF
 #define GATT_KEY_PRESS   0x01
 #define GATT_KEY_RELEASE 0x00
-#define GATT_MEDIA_KEY   0x02
+#define GATT_KEY_TAP   0x02
 #define GATT_BATTERY_LEVEL 0x03
 
 #define GATT_SCAN_BURST_MS        750   // ms per discovery pass before attempting connect
@@ -57,9 +57,9 @@ class KeyEventCallbacks : public NimBLECharacteristicCallbacks {
       HidDispatcher::press_key(b1, boardConfig.dummy);
     } else if (evt == GATT_KEY_RELEASE) {
       HidDispatcher::release_key(b1, boardConfig.dummy);
-    } else if (evt == GATT_MEDIA_KEY) {
-      uint16_t mediaCode = (uint16_t)b1 | ((uint16_t)b2 << 8);
-      HidDispatcher::tap_media(mediaCode, boardConfig.dummy);
+    } else if (evt == GATT_KEY_TAP) {
+      uint16_t keyCode = (uint16_t)b1 | ((uint16_t)b2 << 8);
+      HidDispatcher::tap_key(keyCode, boardConfig.dummy);
     }
   }
 };
@@ -219,10 +219,10 @@ void gatt_send_key_release(uint8_t keycode) {
   pRemoteKeyChar->writeValue(data, 2, false);
 }
 
-void gatt_send_media_key(uint16_t mediaCode) {
+void gatt_send_tap_key(uint16_t keyCode) {
   if (!gatt_client_ready || !pRemoteKeyChar) return;
-  uint8_t data[3] = { GATT_MEDIA_KEY,
-                      (uint8_t)(mediaCode & 0xFF),
-                      (uint8_t)(mediaCode >> 8) };
+  uint8_t data[3] = { GATT_KEY_TAP,
+                      (uint8_t)(keyCode & 0xFF),
+                      (uint8_t)(keyCode >> 8) };
   pRemoteKeyChar->writeValue(data, 3, false);
 }

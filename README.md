@@ -45,7 +45,6 @@ The firmware is in `DactylCode/` and is split into modules:
 | `config/BoardConfig_R.h` | Right half pin assignments, timings, and settings |
 | `config/KeyLayout_L.h` | Left half keymap (layer indices) |
 | `config/KeyLayout_R.h` | Right half keymap (layer indices) |
-| `KeyLayout.h` | Shared keycodes, modifiers, and media key arrays |
 | `MatrixScanner.h/.cpp` | Scans the key matrix and tracks press/release state |
 | `KeymapResolver.h/.cpp` | Resolves pressed keys into actions (layers, toggles, etc.) |
 | `HidDispatcher.h/.cpp` | Sends resolved actions as HID key events via BLE |
@@ -70,11 +69,11 @@ Each half has its own config file under `config/` — `BoardConfig_L.h` and `Boa
 
 I designed this for a 5x6 manuform, requiring 5 columns + 7 rows of GPIO (5x6 for the main keys, plus one extra row for the thumb cluster). The code should work fine with other layouts — just update `MATRIX_KEY_COUNT` in `BoardConfig.h`.
 
-The keymap system works like this: `KeyLayout.h` defines a shared array of keycodes (`letters[]`), modifiers (`letter_mods[]`), and media keys (`media_keys[]`). Your per-half `KeyLayout_L.h` or `KeyLayout_R.h` then defines a `keymap[]` array where each entry is an _index_ into those shared arrays. Layers are stacked — layer 0 occupies `keymap[0..NKEYS-1]`, layer 1 occupies `keymap[NKEYS..2*NKEYS-1]`, and so on.
+The keymap system works like this: your per-half `KeyLayout_L.h` or `KeyLayout_R.h` then defines a `keymap[]` array where each entry is the keystroke for that index in the key matrix. Layers are stacked — layer 0 occupies `keymap[0..NKEYS-1]`, layer 1 occupies `keymap[NKEYS..2*NKEYS-1]`, and so on.
 
 I won't pretend this is fun to set up by hand. The easiest (but slow) way is to enable `debug` and `dummy` in your board config, then press each key to see its matrix index printed over serial. Fill in the keymap from there.
 
-There's also a `Dactyl_keymapper/` sketch that will prompt you for each key and build a keymap. It'll only cover the keys it asks about though, so no media keys or other exotic stuff.
+There's also a `Dactyl_keymapper/` sketch that will prompt you for each key and build a keymap. It'll only cover the keys it asks about though, so no media keys or other exotic stuff. `Dactyl_keyFinder` will print the key index for any keys you hit, which can be helpful as well.
 
 ### The LED
 

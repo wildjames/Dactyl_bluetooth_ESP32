@@ -1,6 +1,3 @@
-#include "../KeyLayout.h"
-
-
 // Layers can be accessed by holding the MOD key, index defined below
 int MODKEY0 = 32;
 
@@ -38,6 +35,4 @@ int keymap[] = {
   KEY_HOME,      KEY_RETURN,   -1,            KEY_SPACE,     -1,
 };
 
-int alt_keymap[] = {
-
-};
+int alt_keymap[] = {};
