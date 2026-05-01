@@ -2,11 +2,7 @@
 //
 // Wireless inter-half communication via a custom BLE GATT service.
 //
-// At boot, both halves attempt a Serial2 handshake to decide which transport to use:
-//   - Cable detected  → split_keeb_communication = true  (existing Serial2 path)
-//   - No cable        → use_gatt = true
-//
-// In GATT mode:
+// The halves always use GATT mode:
 //   Primary   - adds a custom relay service to the NimBLE server that bleKB already owns.
 //               The secondary half connects and writes key events; the primary forwards them via bleKB.
 //   Secondary - does NOT call bleKB.begin(). Instead it initialises NimBLE as a central,
@@ -18,78 +14,29 @@
 
 #include <NimBLEDevice.h>
 
+#include "RuntimeState.h"
+#include "HidDispatcher.h"
+
 // ── UUIDs ─────────────────────────────────────────────────────────────────────
 #define RELAY_SERVICE_UUID  "4FAFC201-1FB5-459E-8FCC-C5C9C331914B"
 #define KEY_EVENT_CHAR_UUID "BEB5483E-36E1-4688-B7F5-EA07361B26A8"
 
-// ── GATT packet format: [event_type, byte1, byte2] ───────────────────────────
-//   Regular key press:   GATT_KEY_PRESS,   keycode,          modifier
-//   Regular key release: GATT_KEY_RELEASE, keycode,          modifier
+// ── GATT packet format: [event_type, byte1, (byte2)] ────────────────────────
+//   Regular key press:   GATT_KEY_PRESS,   keycode
+//   Regular key release: GATT_KEY_RELEASE, keycode
 //   Media key tap:       GATT_MEDIA_KEY,   mediacode_low,    mediacode_high
+//   Battery update:      GATT_BATTERY_LEVEL, percentage_or_0xFF
 #define GATT_KEY_PRESS   0x01
 #define GATT_KEY_RELEASE 0x00
 #define GATT_MEDIA_KEY   0x02
-
-// ── Boot-time wire-detection ──────────────────────────────────────────────────
-#define WIRE_DETECT_SYNC          0xAA
-#define WIRE_DETECT_ACK           0x55
-#define WIRE_DETECT_TIMEOUT_MS    500   // total window (ms)
-#define WIRE_DETECT_PING_INTERVAL 20    // ms between primary-half SYNC pings
+#define GATT_BATTERY_LEVEL 0x03
 
 #define GATT_SCAN_BURST_MS        750   // ms per discovery pass before attempting connect
 #define GATT_RETRY_DELAY_MS       100   // ms between scan retries when nothing is found
 #define GATT_CONNECT_TIMEOUT_MS   2000  // ms before abandoning a connection attempt
 
-// ── Secondary half scans for the primary by BLE device name ──────────────────
-// BoardConfig_R.h defines PRIMARY_BLE_NAME; provide a fallback for the primary
-// half (which never uses this define but must compile without it).
-#ifndef PRIMARY_BLE_NAME
-#define PRIMARY_BLE_NAME "TwoBrownFoxes"
-#endif
-
-// Forward-declare globals defined later in DactylCode.ino (same compilation unit).
-extern bool is_connected;
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Boot-time detection
-// ─────────────────────────────────────────────────────────────────────────────
-// Opens Serial2 and exchanges a SYNC/ACK handshake.
-// Returns true  → halves are wired; caller should set split_keeb_communication=true.
-// Returns false → halves are not wired; caller should set use_gatt=true.
-// Serial2 is left open so the wired path can use it immediately.
-bool detect_wired_connection() {
-  Serial2.begin(115200, SERIAL_8N1, RXD2, TXD2);
-
-  unsigned long deadline = millis() + WIRE_DETECT_TIMEOUT_MS;
-
-  if (is_primary) {
-    // Primary half: ping SYNC repeatedly; return true the moment it gets ACK.
-    while (millis() < deadline) {
-      Serial2.write((uint8_t)WIRE_DETECT_SYNC);
-      unsigned long ping_end = millis() + WIRE_DETECT_PING_INTERVAL;
-      while (millis() < ping_end) {
-        if (Serial2.available() && Serial2.read() == WIRE_DETECT_ACK) {
-          if (DEBUG) { Serial.println("[DETECT] Wired: ACK received"); }
-          return true;
-        }
-      }
-    }
-    if (DEBUG) { Serial.println("[DETECT] No ACK — going wireless"); }
-    return false;
-
-  } else {
-    // Secondary half: wait for SYNC, reply with ACK, return true.
-    while (millis() < deadline) {
-      if (Serial2.available() && Serial2.read() == WIRE_DETECT_SYNC) {
-        Serial2.write((uint8_t)WIRE_DETECT_ACK);
-        if (DEBUG) { Serial.println("[DETECT] Wired: SYNC received"); }
-        return true;
-      }
-    }
-    if (DEBUG) { Serial.println("[DETECT] No SYNC — going wireless"); }
-    return false;
-  }
-}
+// Shared runtime link state defined in DactylCode.ino.
+extern LinkState& linkState;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Primary half: GATT relay server
@@ -104,16 +51,15 @@ class KeyEventCallbacks : public NimBLECharacteristicCallbacks {
     uint8_t b1      = (uint8_t)val[1];
     uint8_t b2      = (val.length() >= 3) ? (uint8_t)val[2] : 0;
 
-    if (DUMMY) return;
+    if (boardConfig.dummy) return;
 
     if (evt == GATT_KEY_PRESS) {
-      bleKB.press(b1, b2);              // b1 = keycode, b2 = modifier
+      HidDispatcher::press_key(b1, boardConfig.dummy);
     } else if (evt == GATT_KEY_RELEASE) {
-      bleKB.release(b1);                // b1 = keycode
-      if (b2) bleKB.release(KEY_LSHIFT); // b2 = modifier; release shift if needed
+      HidDispatcher::release_key(b1, boardConfig.dummy);
     } else if (evt == GATT_MEDIA_KEY) {
       uint16_t mediaCode = (uint16_t)b1 | ((uint16_t)b2 << 8);
-      bleKB.tap(mediaCode);
+      HidDispatcher::tap_media(mediaCode, boardConfig.dummy);
     }
   }
 };
@@ -153,13 +99,13 @@ void setup_gatt_server() {
     NimBLEAdvertising* pAdv = NimBLEDevice::getAdvertising();
     if (pAdv != nullptr) {
       NimBLEAdvertisementData scanResponse;
-      scanResponse.setName(PRIMARY_BLE_NAME);
+      scanResponse.setName(boardConfig.primaryBleName);
       pAdv->setScanResponseData(scanResponse);
       pAdv->start();
     }
   }
 
-  if (DEBUG) { Serial.println("[GATT] Relay server started"); }
+  if (boardConfig.debug) { Serial.println("[GATT] Relay server started"); }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -170,10 +116,10 @@ static bool gatt_client_ready = false;
 
 class GattClientCallbacks : public NimBLEClientCallbacks {
   void onDisconnect(NimBLEClient* pClient, int reason) override {
-    if (DEBUG) { Serial.println("[GATT] Disconnected from primary half"); }
+    if (boardConfig.debug) { Serial.println("[GATT] Disconnected from primary half"); }
     pRemoteKeyChar     = nullptr;
     gatt_client_ready = false;
-    is_connected      = false;
+    linkState.isConnected = false;
   }
 };
 
@@ -194,7 +140,7 @@ bool connect_to_primary_gatt() {
   pScan->setWindow(30);
 
   while (true) {
-    if (DEBUG) { Serial.println("[GATT] Scanning for primary relay service..."); }
+    if (boardConfig.debug) { Serial.println("[GATT] Scanning for primary relay service..."); }
 
     // Scan in short bursts so we can attempt a connection as soon as the
     // primary half is discovered instead of waiting for a long scan to finish.
@@ -203,21 +149,20 @@ bool connect_to_primary_gatt() {
 
     NimBLEScanResults results = pScan->getResults();
 
-    if (DEBUG) {
+    if (boardConfig.debug) {
       Serial.print("[GATT] Scan complete, devices found: ");
       Serial.println(results.getCount());
     }
 
-    bool retry = true;
     for (int i = 0; i < results.getCount(); i++) {
       const NimBLEAdvertisedDevice* dev = results.getDevice(i);
       // Match on device name — the 128-bit relay UUID is too large to fit in
       // the HID advertisement packet so UUID-based filtering is unreliable.
-      if (dev->getName() != PRIMARY_BLE_NAME) {
+      if (dev->getName() != boardConfig.primaryBleName) {
         continue;
       }
 
-      if (DEBUG) {
+      if (boardConfig.debug) {
         Serial.print("[GATT] Found primary half: ");
         Serial.println(dev->getName().c_str());
       }
@@ -228,14 +173,14 @@ bool connect_to_primary_gatt() {
       pClient->setConnectTimeout(GATT_CONNECT_TIMEOUT_MS);
 
       if (!pClient->connect(dev)) {
-        if (DEBUG) { Serial.println("[GATT] Connection failed; will retry scan"); }
+        if (boardConfig.debug) { Serial.println("[GATT] Connection failed; will retry scan"); }
         NimBLEDevice::deleteClient(pClient);
         break; // break inner for-loop; outer while retries
       }
 
       NimBLERemoteService* pSvc = pClient->getService(RELAY_SERVICE_UUID);
       if (!pSvc) {
-        if (DEBUG) { Serial.println("[GATT] Relay service not found on primary half; retrying"); }
+        if (boardConfig.debug) { Serial.println("[GATT] Relay service not found on primary half; retrying"); }
         pClient->disconnect();
         NimBLEDevice::deleteClient(pClient);
         break;
@@ -243,35 +188,35 @@ bool connect_to_primary_gatt() {
 
       pRemoteKeyChar = pSvc->getCharacteristic(KEY_EVENT_CHAR_UUID);
       if (!pRemoteKeyChar) {
-        if (DEBUG) { Serial.println("[GATT] Key characteristic not found; retrying"); }
+        if (boardConfig.debug) { Serial.println("[GATT] Key characteristic not found; retrying"); }
         pClient->disconnect();
         NimBLEDevice::deleteClient(pClient);
         break;
       }
 
       gatt_client_ready = true;
-      is_connected      = true;
-      if (DEBUG) { Serial.println("[GATT] Connected to primary relay server"); }
+      linkState.isConnected = true;
+      if (boardConfig.debug) { Serial.println("[GATT] Connected to primary relay server"); }
       return true;
     }
 
-    if (DEBUG) { Serial.println("[GATT] Primary half not found, retrying scan..."); }
+    if (boardConfig.debug) { Serial.println("[GATT] Primary half not found, retrying scan..."); }
     pScan->clearResults();
     delay(GATT_RETRY_DELAY_MS);
   }
 }
 
-// ── Send helpers called from send_keypress() ──────────────────────────────────
-void gatt_send_key_press(uint8_t keycode, uint8_t modifier) {
+// ── Send helpers called from the key event dispatch path ─────────────────────
+void gatt_send_key_press(uint8_t keycode) {
   if (!gatt_client_ready || !pRemoteKeyChar) return;
-  uint8_t data[3] = { GATT_KEY_PRESS, keycode, modifier };
-  pRemoteKeyChar->writeValue(data, 3, false);
+  uint8_t data[2] = { GATT_KEY_PRESS, keycode };
+  pRemoteKeyChar->writeValue(data, 2, false);
 }
 
-void gatt_send_key_release(uint8_t keycode, uint8_t modifier) {
+void gatt_send_key_release(uint8_t keycode) {
   if (!gatt_client_ready || !pRemoteKeyChar) return;
-  uint8_t data[3] = { GATT_KEY_RELEASE, keycode, modifier };
-  pRemoteKeyChar->writeValue(data, 3, false);
+  uint8_t data[2] = { GATT_KEY_RELEASE, keycode };
+  pRemoteKeyChar->writeValue(data, 2, false);
 }
 
 void gatt_send_media_key(uint16_t mediaCode) {

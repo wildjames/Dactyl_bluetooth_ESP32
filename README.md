@@ -1,45 +1,92 @@
-# Dactyl Manuform with bluetooth via. ESP32
+# Dactyl Manuform with Bluetooth via ESP32
 
-The dactyl manuform keyboard, with bluetooth.
+The dactyl manuform keyboard, with bluetooth. Fully wireless, both halves.
 
-This is by no means a complete, easy-to-replicate project. QMK currently does not support the bluetooth-capable ESP32 microcontroller, due to an allegedly "easier" bluetooth implimentation using a pro micro and a bluetooth breakout board. Doesn't sound easier to me, though. The Arduino code in this repo is just a stop-gap until that gets implimented on the _far_ more robust QMK firmware.
+This is by no means a polished, easy-to-replicate project. QMK didn't properly support the ESP32's bluetooth, and their recommended alternative of a pro micro with a bluetooth breakout board doesn't sound easier to me. The Arduino code in this repo started as a stop-gap until QMK caught up, but honestly it's grown into something fairly capable at this point, so here we are.
 
-The [Dactyl Manuform](https://github.com/abstracthat/dactyl-manuform#:~:text=README.md-,The%20Dactyl%2DManuForm%20Keyboard,just%20drop%20to%20the%20floor.) is a great split keyboard, with a pretty non-standard form. Most pertinently, it's a split keyboard, typically with the two halves having their own microcontrollers that communicate over a TRRS connection, or something similar.
-I wanted a wireless solution, and preferably one that's a bit more flexible. This is the result, and is thanks to the excellent work in getting the ESP32 HID mode running by [these guys](https://github.com/T-vK/ESP32-BLE-Keyboard).
+The [Dactyl Manuform](https://github.com/abstracthat/dactyl-manuform) is a great split keyboard with a pretty non-standard form. It's a split keyboard — typically the two halves have their own microcontrollers communicating over TRRS or similar. I wanted a wireless solution, and preferably one that's a bit more flexible. This is the result, built on top of the excellent [HijelHID_BLEKeyboard](https://github.com/wildjames/HijelHID_BLEKeyboard) library for ESP32 HID-over-BLE.
 
 If you've seen the dactyl before and you're on the fence, I'd say pull the trigger. Learning the layout is worth the trouble, and with some nice clicky blues this is a great keyboard.
 
-Note that at time of writing, a bug in the library I use to handle the bluetooth keyboard interface means that if the client half of the board loses connection with the host half of the keyboard, the host terminates its' session with the connected PC. I've patched this, and made a PR, but until that merges you will need to use [this](https://github.com/wildjames/HijelHID_BLEKeyboard/tree/multiple-clients) version of the library.
+**Note:** You'll need [this fork](https://github.com/wildjames/HijelHID_BLEKeyboard/tree/multiple-clients) of the BLE keyboard library, which patches a bug where the host half would drop its PC connection when the secondary half disconnected.
 
-## Broad board overview
+## How it works
 
-Each half uses an ESP32 to handle all the thinking, and both halves independantly send their keystrokes to a connected device over bluetooth.
-Notably, I've built in the option for inter-keyboard communication and sending keystrokes only from a primary half. This would let you use a modifier on one half to access a layer on the opposing half, which some people like.
-For my usecase, this isn't necessary and I've repurposed the communication wire to share a charging current between the two keyboards - i.e. if one half is plugged in and charging, and the other half is connected to the first, it will also charge.
-There's also a single alternate layer modifier key built in for each half, but I left it at one additional layer because I can never remember any more than that. Finally, there's a toggle-able layer that can be accessed from a chosen key, for alternate layouts, e.g. a QWERTY/Dvorak toggle key.
+Each half runs an ESP32. The **primary** half (left, by default) connects to your PC as a BLE HID keyboard. The **secondary** half connects to the primary over a custom BLE GATT service and forwards its key events wirelessly. The primary then relays those keystrokes to the PC alongside its own — from the PC's perspective, it's just one keyboard.
 
-I initially used plain old ESP32 dev boards, but the cheap breakout battery circuit I had drew far too much current even when the controller was asleep. I caved and used a couple of Feather HUZZAH32 instead. If you're making this project, I'd recommend the same! It's not best deep sleep current draw, but off my 4000mAh batteries I get standby times in the ~month range. Plus, Adafruit sacrifice an analog pin for battery monitoring with no extra work on your behalf, so updating your battery level is trivial.
+I've repurposed the physical cable between the halves purely for sharing charging current. Plug one half in and the other charges too. Keystrokes are **never** sent over USB.
 
-I used some RJ9 connectors to join the halves, and USB-C to supply current/USB to the controllers, though note that keystrokes are **never** sent over USB!
+### Features
 
-## Tayloring the code for yourself
+- **Layers:** A modifier key gives access to a second layer (function keys, navigation, etc.). I left it at one extra layer because I can never remember more than that.
+- **Alternate layout toggle:** A configurable key can toggle the entire base layout, e.g. QWERTY/Dvorak switch via double-tap.
+- **Media keys:** Full media key support — play/pause, volume, brightness, the works.
+- **Double-tap caps lock:** Double-tap the shift key (configurable) to toggle caps lock.
+- **Deep sleep:** Both halves enter deep sleep after configurable idle time. Mash keys to wake them up.
+- **Battery monitoring:** Battery level is reported to the host and periodically updated.
 
-Each half has a BoardConfig.h file, that contains all the user-ediable stuff you should need. I hope most of it is self-explanatory, but there are a couple of Gotchas.
+### Hardware
 
-### Making keymaps for my code
+I initially used plain old ESP32 dev boards, but the cheap breakout battery circuit I had drew far too much current even when the controller was asleep. I caved and used Adafruit Feather HUZZAH32 boards instead. If you're making this project, I'd recommend the same. It's not the best deep sleep current draw out there, but off my 4000mAh batteries I get standby times in the ~month range. Plus, Adafruit sacrifice an analog pin for battery monitoring with no extra work on your behalf, so that's trivial.
 
-I designed this for a 5x6 manuform, requiring 5 + 7 GPIO (5x6 for the main keys, and one more for the thumb cluster). The code should work fine with other layouts, though, just remember to change `NKEYS` in the config!. If you need help wiring a keyboard, there are plenty of guides - I'd not recommend something like this for a first keyboard!
+I used RJ9 connectors to join the halves (for the shared charging current) and USB-C to supply power to the controllers.
 
-The way I've written the code, making keyboard layouts is not fun. The way keyboards generally work is to poll each key for if it's pressed, then parse out what keystroke to send. I do this by finding all the indexes of pressed keys (e.g. the key attached to row 2 and column 5 would be index
+I'm moving to these boards: https://learn.adafruit.com/adafruit-esp32-s3-feather/pinouts
 
-I've written a python helper script to convert QMK's slightly less insane JSON keymap format into my required form, but when I wired the key rows and columns, I wasn't smart about it and you'll need to read the python code comments if you want to use that. Sorry!
+## Code structure
 
-A less painful, but slow way to make a keymap is to enable the DEBUG and DUMMY modes in the arduino code. Then, hitting a key will tell you its index and you can fill the keymap array that way. Alternatively, there's a keymapper sketch that _should_ prompt you for keys, and build a keymap for you that way. It'll only work for the keys it asks for, though, so no exotic stuff like play/pause, or whatever.
+The firmware is in `DactylCode/` and is split into modules:
 
-### The LED pin
+| File | Purpose |
+|------|---------|
+| `DactylCode.ino` | Main sketch — setup, loop, and action dispatch |
+| `BoardConfig.h` | Shared struct definitions for board configuration |
+| `config/BoardConfig_L.h` | Left half pin assignments, timings, and settings |
+| `config/BoardConfig_R.h` | Right half pin assignments, timings, and settings |
+| `config/KeyLayout_L.h` | Left half keymap (layer indices) |
+| `config/KeyLayout_R.h` | Right half keymap (layer indices) |
+| `KeyLayout.h` | Shared keycodes, modifiers, and media key arrays |
+| `MatrixScanner.h/.cpp` | Scans the key matrix and tracks press/release state |
+| `KeymapResolver.h/.cpp` | Resolves pressed keys into actions (layers, toggles, etc.) |
+| `HidDispatcher.h/.cpp` | Sends resolved actions as HID key events via BLE |
+| `LinkManager.h/.cpp` | Manages the inter-half BLE GATT connection |
+| `GattRelay.h` | Custom GATT service for wireless key event relay |
+| `PowerManager.h/.cpp` | Battery monitoring and deep sleep |
+| `StatusLed.h/.cpp` | Status LED control (connected/disconnected indication) |
+| `RuntimeState.h` | Runtime state structs (link, battery, matrix, LED, loop) |
 
-I didn't want illumination on all keys because of the power consumption factor, but an indication LED is still nice. I wired one underneath the escape and backspace keys for each half, and these will flash when the keyboard is disconnected or be solidly illuminated when paired. If the LED is off, your battery is dead (todo: impliment a more elegant solution...) This is in the config as "LEDPin".
+To switch between compiling for the left or right half, comment/uncomment the relevant `#include` at the top of `DactylCode.ino`:
 
-### Waking from deepsleep
+```cpp
+#include "config/BoardConfig_L.h"
+// #include "config/BoardConfig_R.h"
+```
 
-After some amount of idle time, the keyboard halves will enter deepsleep to save power. However, in the interests of convinence, I wanted to be able to mash keys to wake them back up. The RTC pins can be held high during deepsleep, though I suspect at a cost to battery life, but for my feather boards I couldn't get the wakup to _not_ trigger even on things like touching an unconnected wire to the wakeup pins... The dev boards worked okay though, so the code should be fine.
+## Tailoring the code for yourself
+
+Each half has its own config file under `config/` — `BoardConfig_L.h` and `BoardConfig_R.h`. These contain all the user-editable stuff you should need: pin assignments, timing parameters, LED config, battery thresholds, and whether the half is primary or secondary. I hope most of it is self-explanatory.
+
+### Making keymaps
+
+I designed this for a 5x6 manuform, requiring 5 columns + 7 rows of GPIO (5x6 for the main keys, plus one extra row for the thumb cluster). The code should work fine with other layouts — just update `MATRIX_KEY_COUNT` in `BoardConfig.h`.
+
+The keymap system works like this: `KeyLayout.h` defines a shared array of keycodes (`letters[]`), modifiers (`letter_mods[]`), and media keys (`media_keys[]`). Your per-half `KeyLayout_L.h` or `KeyLayout_R.h` then defines a `keymap[]` array where each entry is an _index_ into those shared arrays. Layers are stacked — layer 0 occupies `keymap[0..NKEYS-1]`, layer 1 occupies `keymap[NKEYS..2*NKEYS-1]`, and so on.
+
+I won't pretend this is fun to set up by hand. The easiest (but slow) way is to enable `debug` and `dummy` in your board config, then press each key to see its matrix index printed over serial. Fill in the keymap from there.
+
+There's also a `Dactyl_keymapper/` sketch that will prompt you for each key and build a keymap. It'll only cover the keys it asks about though, so no media keys or other exotic stuff.
+
+### The LED
+
+I didn't want full per-key illumination because of power consumption, but a status LED is still nice. I wired one underneath the escape/backspace area on each half. It flashes when the keyboard is searching for a connection and stays solid when paired. Configuration is in the `led` section of your board config (pin, PWM frequency, resolution, max duty cycle).
+
+### Deep sleep and waking
+
+After a configurable idle period, both halves enter deep sleep to save power. Wake-up is triggered by specific RTC-capable pins going high — you define which column pins to use as wake sources in `WAKE_PINS[]` in your board config.
+
+Fair warning: on my Feather boards I had trouble getting the wake-up to _not_ trigger from electrical noise on unconnected pins. The plain ESP32 dev boards were fine, so the code should work — your mileage may vary with the hardware.
+
+## Dependencies
+
+- [NimBLE-Arduino](https://github.com/h2zero/NimBLE-Arduino) (1.4+)
+- [HijelHID_BLEKeyboard](https://github.com/wildjames/HijelHID_BLEKeyboard/tree/multiple-clients) (the `multiple-clients` branch)
