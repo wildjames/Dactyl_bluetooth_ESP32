@@ -4,7 +4,7 @@ namespace KeymapResolver {
 
 namespace {
 
-void push_action(Result& result, uint8_t keyIndex, ActionType type, uint8_t keycode = 0, uint8_t modifier = 0, uint16_t mediaCode = 0) {
+void push_action(Result& result, uint8_t keyIndex, ActionType type, uint8_t keycode = 0, uint16_t mediaCode = 0) {
   if (result.actionCount >= (int)(sizeof(result.actions) / sizeof(result.actions[0]))) {
     return;
   }
@@ -13,7 +13,6 @@ void push_action(Result& result, uint8_t keyIndex, ActionType type, uint8_t keyc
   action.type = type;
   action.keyIndex = keyIndex;
   action.keycode = keycode;
-  action.modifier = modifier;
   action.mediaCode = mediaCode;
 }
 
@@ -95,7 +94,7 @@ void append_release_for_alternate_layer(int pressedIndex, const MatrixState& mat
 
   if (alternateLetterIndex < -1) {
     alternateLetterIndex *= -1;
-    push_action(result, alternateIndex, ActionType::MediaRelease, 0, 0, config.mediaKeys[alternateLetterIndex]);
+    push_action(result, alternateIndex, ActionType::MediaRelease, 0, config.mediaKeys[alternateLetterIndex]);
     return;
   }
 
@@ -103,8 +102,7 @@ void append_release_for_alternate_layer(int pressedIndex, const MatrixState& mat
     result,
     alternateIndex,
     ActionType::KeyRelease,
-    config.keycodes[alternateLetterIndex],
-    config.keyModifiers[alternateLetterIndex]
+    (uint8_t)alternateLetterIndex
   );
 }
 
@@ -144,7 +142,7 @@ void resolve(MatrixState& matrixState, KeyboardState& keyboardState, const Confi
 
       if (letterIndex < -1) {
         letterIndex *= -1;
-        push_action(result, pressedIndex, ActionType::MediaTap, 0, 0, config.mediaKeys[letterIndex]);
+        push_action(result, pressedIndex, ActionType::MediaTap, 0, config.mediaKeys[letterIndex]);
         continue;
       }
 
@@ -153,8 +151,7 @@ void resolve(MatrixState& matrixState, KeyboardState& keyboardState, const Confi
         result,
         pressedIndex,
         ActionType::KeyPress,
-        config.keycodes[letterIndex],
-        config.keyModifiers[letterIndex]
+        (uint8_t)letterIndex
       );
     }
 
@@ -171,7 +168,7 @@ void resolve(MatrixState& matrixState, KeyboardState& keyboardState, const Confi
 
       if (letterIndex < -1) {
         letterIndex *= -1;
-        push_action(result, pressedIndex, ActionType::MediaRelease, 0, 0, config.mediaKeys[letterIndex]);
+        push_action(result, pressedIndex, ActionType::MediaRelease, 0, config.mediaKeys[letterIndex]);
         continue;
       }
 
@@ -179,8 +176,7 @@ void resolve(MatrixState& matrixState, KeyboardState& keyboardState, const Confi
         result,
         pressedIndex,
         ActionType::KeyRelease,
-        config.keycodes[letterIndex],
-        config.keyModifiers[letterIndex]
+        (uint8_t)letterIndex
       );
       if (config.modifierKeyIndex >= 0) {
         append_release_for_alternate_layer(pressedIndex, matrixState, keyboardState, config, activeKeymap, keymapLength, result);

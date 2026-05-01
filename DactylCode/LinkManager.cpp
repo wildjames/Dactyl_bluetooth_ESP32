@@ -90,11 +90,11 @@ bool dispatch_remote_action(const KeymapResolver::Action& action, const LinkStat
         return true;
 
       case KeymapResolver::ActionType::KeyPress:
-        gatt_send_key_press(action.keycode, action.modifier);
+        gatt_send_key_press(action.keycode);
         return true;
 
       case KeymapResolver::ActionType::KeyRelease:
-        gatt_send_key_release(action.keycode, action.modifier);
+        gatt_send_key_release(action.keycode);
         return true;
 
       case KeymapResolver::ActionType::None:

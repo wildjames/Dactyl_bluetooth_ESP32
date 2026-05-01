@@ -9,23 +9,18 @@
 
 // PINS!
 
-// Status LED
-static const int LED_PIN = 21;
+// Status LED (external, wired to D13 / GPIO 13)
+static const int LED_PIN = 13;
 
 // Columns are READ
-static const int COL_PINS[] = {33, 12, 13, 14, 15};
+static const int COL_PINS[] = {18, 17, 16, 15, 14};
 
 // Rows are DRIVEN HIGH
-static const int ROW_PINS[] = {27, 32, 22, 23, 19, 16, 17};
+static const int ROW_PINS[] = {5, 6, 8, 9, 10, 11, 12};
 
-// For waking from deepsleep,
-// you *could* have these pins listen for a HIGH signal to wake the controller.
-// Requires using RTC pins for rows: {0, 2, 4, 12-15, 25, 26, 27, 32-39}
-// Selected wake columns:
-// GPIO33 -> Esc, 1, 2, 3, 4, 5, Home
-// GPIO13 -> Left Shift, A, S, D, F, G
-// GPIO14 -> Left Ctrl, Z, X, C, V, B, Space
-static const int WAKE_PINS[] = {33, 13, 14};
+// For waking from deepsleep, all columns are wake pins.
+// On ESP32-S3, GPIOs 0-21 are RTC-capable.
+static const int WAKE_PINS[] = {18, 17, 16, 15, 14};
 
 HijelHID_BLEKeyboard bleKB("TwoBrownFoxes", "JWILD", 50);
 
@@ -44,17 +39,13 @@ inline BoardConfig make_board_config() {
   config.rowPins = ROW_PINS;
   config.rowCount = 7;
   config.wakePins = WAKE_PINS;
-  config.wakeCount = 3;
+  config.wakeCount = 5;
+  config.enableBatteryMonitoring = true;
 
   config.led.pin = LED_PIN;
   config.led.frequency = 5000;
   config.led.resolution = 8;
   config.led.maxDutyCycle = 200;
-
-  config.battery.pin = A13;
-  config.battery.refVoltage = 3.3;
-  config.battery.minVoltage = 3.2;
-  config.battery.maxVoltage = 4.2;
 
   config.timings.pollTimeMs = 5;
   config.timings.doubleTapIntervalMs = 1000;

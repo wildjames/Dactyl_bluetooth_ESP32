@@ -16,13 +16,6 @@ struct LedConfig {
   int maxDutyCycle;
 };
 
-struct BatteryConfig {
-  int pin;
-  float refVoltage;
-  float minVoltage;
-  float maxVoltage;
-};
-
 struct TimingConfig {
   int pollTimeMs;
   int doubleTapIntervalMs;
@@ -48,6 +41,7 @@ struct BoardConfig {
   int rowCount;
   const int* wakePins;
   int wakeCount;
+  bool enableBatteryMonitoring;
   LedConfig led;
   BatteryConfig battery;
   TimingConfig timings;

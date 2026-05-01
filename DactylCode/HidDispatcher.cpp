@@ -38,23 +38,20 @@ void release_media(uint16_t mediaCode, bool dummy) {
   bleKB.release(mediaCode);
 }
 
-void press_key(uint8_t keycode, uint8_t modifier, bool dummy) {
+void press_key(uint8_t keycode, bool dummy) {
   if (dummy) {
     return;
   }
 
-  bleKB.press(keycode, modifier);
+  bleKB.press(keycode);
 }
 
-void release_key(uint8_t keycode, uint8_t modifier, bool dummy) {
+void release_key(uint8_t keycode, bool dummy) {
   if (dummy) {
     return;
   }
 
   bleKB.release(keycode);
-  if (modifier) {
-    bleKB.release(KEY_LSHIFT);
-  }
 }
 
 void press_passthrough(uint8_t keycode, bool dummy) {
@@ -91,11 +88,11 @@ void dispatch_action(const KeymapResolver::Action& action, bool dummy) {
       return;
 
     case KeymapResolver::ActionType::KeyPress:
-      press_key(action.keycode, action.modifier, dummy);
+      press_key(action.keycode, dummy);
       return;
 
     case KeymapResolver::ActionType::KeyRelease:
-      release_key(action.keycode, action.modifier, dummy);
+      release_key(action.keycode, dummy);
       return;
   }
 }

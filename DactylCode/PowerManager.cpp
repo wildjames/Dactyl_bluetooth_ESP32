@@ -1,21 +1,104 @@
 #include "PowerManager.h"
 
+#include <Adafruit_MAX1704X.h>
+#include <Wire.h>
 #include <esp_sleep.h>
 
 #include "HidDispatcher.h"
 #include "MatrixScanner.h"
 #include "StatusLed.h"
 
+namespace {
+
+Adafruit_MAX17048 batteryMonitor;
+bool batteryMonitorInitialized = false;
+bool batteryMonitorAvailable = false;
+
+void mark_battery_unavailable(BatteryState& batteryState) {
+  batteryState.monitorAvailable = false;
+  batteryState.voltage = NAN;
+  batteryState.percentage = NAN;
+  batteryState.chargeRate = NAN;
+  batteryState.lastUpdate = millis();
+}
+
+void enable_i2c_power() {
+#if defined(PIN_I2C_POWER)
+  pinMode(PIN_I2C_POWER, OUTPUT);
+  digitalWrite(PIN_I2C_POWER, HIGH);
+#elif defined(I2C_POWER)
+  pinMode(I2C_POWER, OUTPUT);
+  digitalWrite(I2C_POWER, HIGH);
+#endif
+}
+
+}
+
 namespace PowerManager {
 
+void begin(const BoardConfig& config, BatteryState& batteryState) {
+  if (!config.enableBatteryMonitoring) {
+    if (config.debug) {
+      Serial.println("Battery monitoring disabled in config");
+    }
+    mark_battery_unavailable(batteryState);
+    return;
+  }
+
+  enable_i2c_power();
+
+  if (batteryMonitorInitialized) {
+    batteryState.monitorAvailable = batteryMonitorAvailable;
+    return;
+  }
+
+  Wire.begin();
+  batteryMonitorAvailable = batteryMonitor.begin(&Wire);
+  batteryMonitorInitialized = true;
+
+  if (!batteryMonitorAvailable) {
+    if (config.debug) {
+      Serial.println("Battery monitor not found");
+    }
+    mark_battery_unavailable(batteryState);
+    return;
+  }
+
+  batteryState.monitorAvailable = true;
+  if (config.debug) {
+    Serial.print("Battery monitor ready, chip ID: 0x");
+    Serial.println(batteryMonitor.getChipID(), HEX);
+  }
+}
+
 void update_battery_level(const BoardConfig& config, const LinkState& linkState, BatteryState& batteryState) {
-  int battery_measurement = analogRead(config.battery.pin);
-  float battery_voltage = battery_measurement * (config.battery.refVoltage * 2.0f * 1.1f / 4095.0f);
-  float battery_percentage = 100.0f * (battery_voltage - config.battery.minVoltage)
-                           / (config.battery.maxVoltage - config.battery.minVoltage);
+  (void)linkState;
+
+  if (!batteryMonitorInitialized) {
+    begin(config, batteryState);
+  }
+
+  if (!batteryMonitorAvailable) {
+    mark_battery_unavailable(batteryState);
+    return;
+  }
+
+  float battery_voltage = batteryMonitor.cellVoltage();
+  float battery_percentage = batteryMonitor.cellPercent();
+  float battery_charge_rate = batteryMonitor.chargeRate();
+
+  if (isnan(battery_voltage) || isnan(battery_percentage)) {
+    mark_battery_unavailable(batteryState);
+    return;
+  }
 
   if (battery_percentage > 100.0f) { battery_percentage = 100.0f; }
   if (battery_percentage < 0.0f) { battery_percentage = 0.0f; }
+
+  batteryState.monitorAvailable = true;
+  batteryState.voltage = battery_voltage;
+  batteryState.percentage = battery_percentage;
+  batteryState.chargeRate = battery_charge_rate;
 
   // The primary sends its battery level to the host. But, what about the secondary?
   // TODO: come up with a solution

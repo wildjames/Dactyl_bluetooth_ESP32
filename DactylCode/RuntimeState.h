@@ -17,6 +17,10 @@ struct LinkState {
 };
 
 struct BatteryState {
+  bool monitorAvailable = false;
+  float voltage = NAN;
+  float percentage = NAN;
+  float chargeRate = NAN;
   unsigned long lastUpdate = 0;
 };
 

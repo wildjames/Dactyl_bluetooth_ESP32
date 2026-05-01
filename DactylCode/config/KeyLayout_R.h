@@ -1,9 +1,8 @@
-// This is NOT the actual key layout! This is just a key, to the key layout.
 #include "../KeyLayout.h"
 
 
 // Layers can be accessed by holding the MOD key, index defined below
-int MODKEY0 = 32;
+int MODKEY0 = 28;
 
 int SHIFTKEY0 = -1;
 
@@ -14,27 +13,29 @@ int alt_toggle = -1;
 int typing_toggle = -1;
 
 int keymap[] = {
-  // Needs to be the index of the desired key in the letters array.
-  // Layers are accessed by adding NKEYS to the pressed switch ID,
-  // so this array needs to be NKEYS * NLAYERS long.
-
-  // Layer 0
-   60,   35,   34,   33,   31,
-   32,   46,   36,   15,   14,
-    8,   24,   20,   69,   41,
-   40,   11,   10,    7,    9,
-   47,   53,   44,   43,   42,
-   13,   12,   45,   -1,   -1,
-   37,  102,   -1,   -1,   62,
+  KEY_6,      KEY_7,      KEY_8,      KEY_9,       KEY_0,     KEY_BACKSPACE,
+  KEY_GRAVE, // Thumb cluster keys are at the end of each row
+  KEY_Y,      KEY_U,      KEY_I,      KEY_O,       KEY_P,     KEY_MINUS,
+  KEY_END,
+  KEY_H,      KEY_J,      KEY_K,      KEY_L,       KEY_SEMICOLON, KEY_APOSTROPHE,
+  KEY_SPACE,
+  KEY_N,      KEY_M,      KEY_COMMA,  KEY_DOT,     KEY_SLASH,  KEY_RSHIFT,
+  KEY_BACKSLASH, -1, -1, // The key at index 28 is the modifier key and 29 is no connect
+  -12, // MEDIA_PLAY_PAUSE
+  KEY_EQUAL, -1, -1, KEY_RETURN, // Key 34 is the enter key on the thumb cluster, and 35-36 are no connects
 
   // Layer 1
-   65,   80,   79,   78,   76,
-   77,   46,   81,   36,   34,
-   33,   -1,   32,   69,   82,
-  106,   31,   30,   -1,   29,
-   47,   64,   62,   28,   27,
-   -1,   26,   61,   -1,   -1,
-   43,   35,   -1,   -1,   62,
+  // Number rows become F6-F10, minus becomes F11 and apostrophe becomes F12. Right shift becomes insert and equals becomes the dot. Numbers are M=1, ,=2, .=3, j=4, etc
+  KEY_F6,     KEY_F7,     KEY_F8,     KEY_F9,      KEY_F10,    KEY_DELETE,
+  KEY_GRAVE,
+  -1,         KEY_KP_7,   KEY_KP_8,   KEY_KP_9,    KEY_KP_PLUS,   KEY_F11,
+  KEY_END,
+  -1,         KEY_KP_4,   KEY_KP_5,   KEY_KP_6,    KEY_KP_MINUS,  KEY_F12,
+  KEY_SPACE,
+  -1,         KEY_KP_1,   KEY_KP_2,   KEY_KP_3,    -1,             KEY_INSERT,
+  KEY_BACKSLASH, -1, -1,
+  KEY_KP_0,
+  KEY_KP_DOT, -1, -1, KEY_RETURN,
 };
 
 int alt_keymap[] = {

@@ -4,8 +4,8 @@
 //******************************************************************
 
 // board-specific info in a header file. Make sure to change this!
-#include "config/BoardConfig_L.h"
-// #include "config/BoardConfig_R.h"
+// #include "config/BoardConfig_L.h"
+#include "config/BoardConfig_R.h"
 
 #include "RuntimeState.h"
 #include "MatrixScanner.h"
@@ -43,8 +43,6 @@ KeymapResolver::Config make_keymap_resolver_config() {
   config.primaryKeymapLength = sizeof(keymap) / sizeof(keymap[0]);
   config.alternateKeymap = alt_keymap;
   config.alternateKeymapLength = sizeof(alt_keymap) / sizeof(alt_keymap[0]);
-  config.keycodes = letters;
-  config.keyModifiers = letter_mods;
   config.mediaKeys = media_keys;
   return config;
 }
@@ -93,6 +91,7 @@ void setup() {
   MatrixScanner::configure_pins(boardConfig);
   StatusLed::begin(boardConfig, runtimeState.led);
   LinkManager::begin(linkState);
+  PowerManager::begin(boardConfig, runtimeState.battery);
   initialize_runtime_timers();
 
   PowerManager::update_battery_level(boardConfig, linkState, runtimeState.battery);
@@ -165,9 +164,7 @@ void dispatch_keymap_result(const KeymapResolver::Result& result) {
       Serial.print(", keyIndex=");
       Serial.print(result.actions[i].keyIndex);
       Serial.print(", keycode=");
-      Serial.print(result.actions[i].keycode);
-      Serial.print(", modifier=");
-      Serial.println(result.actions[i].modifier);
+      Serial.println(result.actions[i].keycode);
     }
     dispatch_keymap_action(result.actions[i]);
   }

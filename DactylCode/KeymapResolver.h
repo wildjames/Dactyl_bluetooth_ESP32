@@ -28,7 +28,6 @@ struct Action {
   ActionType type = ActionType::None;
   uint8_t keyIndex = 0;
   uint8_t keycode = 0;
-  uint8_t modifier = 0;
   uint16_t mediaCode = 0;
 };
 
@@ -43,8 +42,6 @@ struct Config {
   int primaryKeymapLength = 0;
   const int* alternateKeymap = nullptr;
   int alternateKeymapLength = 0;
-  const uint8_t* keycodes = nullptr;
-  const uint8_t* keyModifiers = nullptr;
   const uint16_t* mediaKeys = nullptr;
 };
 

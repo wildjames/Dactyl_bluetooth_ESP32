@@ -21,13 +21,15 @@
 #define RELAY_SERVICE_UUID  "4FAFC201-1FB5-459E-8FCC-C5C9C331914B"
 #define KEY_EVENT_CHAR_UUID "BEB5483E-36E1-4688-B7F5-EA07361B26A8"
 
-// ── GATT packet format: [event_type, byte1, byte2] ───────────────────────────
-//   Regular key press:   GATT_KEY_PRESS,   keycode,          modifier
-//   Regular key release: GATT_KEY_RELEASE, keycode,          modifier
+// ── GATT packet format: [event_type, byte1, (byte2)] ────────────────────────
+//   Regular key press:   GATT_KEY_PRESS,   keycode
+//   Regular key release: GATT_KEY_RELEASE, keycode
 //   Media key tap:       GATT_MEDIA_KEY,   mediacode_low,    mediacode_high
+//   Battery update:      GATT_BATTERY_LEVEL, percentage_or_0xFF
 #define GATT_KEY_PRESS   0x01
 #define GATT_KEY_RELEASE 0x00
 #define GATT_MEDIA_KEY   0x02
+#define GATT_BATTERY_LEVEL 0x03
 
 #define GATT_SCAN_BURST_MS        750   // ms per discovery pass before attempting connect
 #define GATT_RETRY_DELAY_MS       100   // ms between scan retries when nothing is found
@@ -52,9 +54,9 @@ class KeyEventCallbacks : public NimBLECharacteristicCallbacks {
     if (boardConfig.dummy) return;
 
     if (evt == GATT_KEY_PRESS) {
-      HidDispatcher::press_key(b1, b2, boardConfig.dummy);   // b1 = keycode, b2 = modifier
+      HidDispatcher::press_key(b1, boardConfig.dummy);
     } else if (evt == GATT_KEY_RELEASE) {
-      HidDispatcher::release_key(b1, b2, boardConfig.dummy); // b1 = keycode, b2 = modifier
+      HidDispatcher::release_key(b1, boardConfig.dummy);
     } else if (evt == GATT_MEDIA_KEY) {
       uint16_t mediaCode = (uint16_t)b1 | ((uint16_t)b2 << 8);
       HidDispatcher::tap_media(mediaCode, boardConfig.dummy);
@@ -205,16 +207,16 @@ bool connect_to_primary_gatt() {
 }
 
 // ── Send helpers called from the key event dispatch path ─────────────────────
-void gatt_send_key_press(uint8_t keycode, uint8_t modifier) {
+void gatt_send_key_press(uint8_t keycode) {
   if (!gatt_client_ready || !pRemoteKeyChar) return;
-  uint8_t data[3] = { GATT_KEY_PRESS, keycode, modifier };
-  pRemoteKeyChar->writeValue(data, 3, false);
+  uint8_t data[2] = { GATT_KEY_PRESS, keycode };
+  pRemoteKeyChar->writeValue(data, 2, false);
 }
 
-void gatt_send_key_release(uint8_t keycode, uint8_t modifier) {
+void gatt_send_key_release(uint8_t keycode) {
   if (!gatt_client_ready || !pRemoteKeyChar) return;
-  uint8_t data[3] = { GATT_KEY_RELEASE, keycode, modifier };
-  pRemoteKeyChar->writeValue(data, 3, false);
+  uint8_t data[2] = { GATT_KEY_RELEASE, keycode };
+  pRemoteKeyChar->writeValue(data, 2, false);
 }
 
 void gatt_send_media_key(uint16_t mediaCode) {
