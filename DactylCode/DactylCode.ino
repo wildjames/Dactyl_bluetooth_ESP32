@@ -64,6 +64,7 @@ void initialize_debug_serial() {
 void initialize_runtime_timers() {
   unsigned long now = millis();
   keyboardState.lastModTap = now;
+  keyboardState.lastShiftTap = now;
   keyboardState.lastKeypress = now;
   runtimeState.loop.lastLoop = now;
 }

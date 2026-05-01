@@ -32,7 +32,8 @@ void show_disconnected(const BoardConfig& config, LedState& ledState) {
 
 void turn_off(const BoardConfig& config, LedState& ledState) {
   ledState.outputState = LOW;
-  digitalWrite(config.led.pin, ledState.outputState);
+  ledState.dutyCycle = 0;
+  ledcWrite(config.led.pin, ledState.outputState * ledState.dutyCycle);
 }
 
 }
