@@ -12,10 +12,10 @@
 
 #ifdef RIGHT_HALF
 // Right half: 5 rows x 7 cols
-static const int ROW_PINS[] = {10, 5, 6, 11, 9};
-static const int COL_PINS[] = {17, 12, 15, 16, 8, 14, 18};
-static const int ROW_COUNT = 5;
-static const int COL_COUNT = 7;
+static const int COL_PINS[] = {11, 10, 9, 5, 6};
+static const int ROW_PINS[] = {14, 15, 12, 16, 18, 8, 17};
+static const int COL_COUNT = 5;
+static const int ROW_COUNT = 7;
 #endif
 
 #ifdef LEFT_HALF

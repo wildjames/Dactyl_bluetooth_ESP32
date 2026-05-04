@@ -13,14 +13,16 @@
 static const int LED_PIN = 13;
 
 // Columns are READ
-static const int COL_PINS[] = {18, 17, 16, 15, 14};
+// ESP32-S3 Feather: A0=GPIO18, A1=GPIO17, A2=GPIO16, A3=GPIO15, A4=GPIO14, A5=GPIO8, D12=GPIO12
+static const int COL_PINS[] = {17, 12, 15, 16, 8, 14, 18};
 
 // Rows are DRIVEN HIGH
-static const int ROW_PINS[] = {5, 6, 8, 9, 10, 11, 12};
+// ESP32-S3 Feather: D5=GPIO5, D6=GPIO6, D9=GPIO9, D10=GPIO10, D11=GPIO11
+static const int ROW_PINS[] = {10, 5, 6, 11, 9};
 
-// For waking from deepsleep, all columns are wake pins.
-// On ESP32-S3, GPIOs 0-21 are RTC-capable.
-static const int WAKE_PINS[] = {18, 17, 16, 15, 14};
+// For waking from deepsleep, all column pins are RTC-capable (GPIO 0-21)
+// so we use all columns as wake pins.
+static const int WAKE_PINS[] = {17, 12, 15, 16, 8, 14, 18};
 
 HijelHID_BLEKeyboard bleKB("TwoBrownFoxes", "JWILD", 50);
 
