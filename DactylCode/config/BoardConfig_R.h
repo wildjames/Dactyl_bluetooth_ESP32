@@ -33,7 +33,7 @@ inline BoardConfig make_board_config() {
   config.bleDeviceName = "TwoBrownFoxes_R";
   config.primaryBleName = "TwoBrownFoxes";
   config.manufacturerName = "JWILD";
-  config.debug = true;
+  config.debug = false;
   config.dummy = false;
   config.isPrimary = false;
   config.colPins = COL_PINS;

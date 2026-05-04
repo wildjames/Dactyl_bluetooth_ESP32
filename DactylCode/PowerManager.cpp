@@ -58,6 +58,9 @@ void begin(const BoardConfig& config, BatteryState& batteryState) {
   }
 
   batteryState.monitorAvailable = true;
+  // Schedule the first battery poll ~2s from now so the fuel gauge can settle
+  // after power-on before we report a level to BLE.
+  batteryState.lastUpdate = millis() - config.timings.batteryPollIntervalMs + 2000;
   if (config.debug) {
     Serial.print("Battery monitor ready, chip ID: 0x");
     Serial.println(batteryMonitor.getChipID(), HEX);

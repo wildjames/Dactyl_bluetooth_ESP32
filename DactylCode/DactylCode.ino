@@ -90,11 +90,9 @@ void setup() {
   initialize_debug_serial();
   MatrixScanner::configure_pins(boardConfig);
   StatusLed::begin(boardConfig, runtimeState.led);
-  LinkManager::begin(linkState);
   PowerManager::begin(boardConfig, runtimeState.battery);
+  LinkManager::begin(linkState);
   initialize_runtime_timers();
-
-  PowerManager::update_battery_level(boardConfig, linkState, runtimeState.battery);
 }
 
 
