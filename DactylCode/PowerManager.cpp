@@ -114,6 +114,8 @@ void update_battery_level(const BoardConfig& config, const LinkState& linkState,
 void enter_deep_sleep(const BoardConfig& config, LedState& ledState) {
   if (config.debug) { Serial.println("Entering deep sleep!"); }
 
+  bleKB.beforeSleep();
+
   StatusLed::turn_off(config, ledState);
 
   esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_TIMER);
