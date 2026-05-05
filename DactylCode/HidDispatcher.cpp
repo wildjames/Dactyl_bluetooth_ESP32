@@ -24,6 +24,11 @@ bool usb_can_send() {
   return usbStarted && tud_ready();
 }
 
+bool should_use_usb(ConnectionType conn) {
+  if (conn != ConnectionType::USB) return false;
+  return usb_can_send();
+}
+
 }
 
 namespace HidDispatcher {
@@ -34,9 +39,12 @@ void begin() {
 
 void begin_usb() {
   if (!usbStarted) {
-    USB.begin();
     usbKB.begin();
+    USB.begin();
     usbStarted = true;
+    if (boardConfig.debug) {
+      Serial.println("[HID] USB HID started");
+    }
   }
 }
 
@@ -53,7 +61,7 @@ void set_battery_level(float batteryPercentage) {
 }
 
 void release_all(ConnectionType conn) {
-  if (conn == ConnectionType::USB && usb_can_send()) {
+  if (should_use_usb(conn)) {
     usbKB.releaseAll();
   } else {
     bleKB.releaseAll();
@@ -61,7 +69,7 @@ void release_all(ConnectionType conn) {
 }
 
 void tap_caps_lock(ConnectionType conn) {
-  if (conn == ConnectionType::USB && usb_can_send()) {
+  if (should_use_usb(conn)) {
     usbKB.pressRaw((uint8_t)KEY_CAPS_LOCK);
     delay(25);
     usbKB.releaseAll();
@@ -75,7 +83,7 @@ void tap_key(uint8_t keyCode, bool dummy, ConnectionType conn) {
     return;
   }
 
-  if (conn == ConnectionType::USB && usb_can_send()) {
+  if (should_use_usb(conn)) {
     usbKB.pressRaw(keyCode);
     delay(25);
     usbKB.releaseAll();
@@ -89,7 +97,15 @@ void press_key(uint8_t keycode, bool dummy, ConnectionType conn) {
     return;
   }
 
-  if (conn == ConnectionType::USB && usb_can_send()) {
+  if (should_use_usb(conn)) {
+    if (boardConfig.debug) {
+      Serial.print("[HID] USB pressRaw keycode=");
+      Serial.print(keycode);
+      Serial.print(" tud_mounted=");
+      Serial.print(tud_mounted());
+      Serial.print(" tud_ready=");
+      Serial.println(tud_ready());
+    }
     usbKB.pressRaw(keycode);
   } else {
     bleKB.press(keycode);
@@ -101,7 +117,7 @@ void release_key(uint8_t keycode, bool dummy, ConnectionType conn) {
     return;
   }
 
-  if (conn == ConnectionType::USB && usb_can_send()) {
+  if (should_use_usb(conn)) {
     usbKB.releaseAll();
   } else {
     bleKB.release(keycode);
@@ -113,7 +129,7 @@ void press_passthrough(uint8_t keycode, bool dummy, ConnectionType conn) {
     return;
   }
 
-  if (conn == ConnectionType::USB && usb_can_send()) {
+  if (should_use_usb(conn)) {
     usbKB.pressRaw(keycode);
   } else {
     bleKB.press(keycode);
@@ -121,7 +137,7 @@ void press_passthrough(uint8_t keycode, bool dummy, ConnectionType conn) {
 }
 
 void release_passthrough(uint8_t keycode, ConnectionType conn) {
-  if (conn == ConnectionType::USB && usb_can_send()) {
+  if (should_use_usb(conn)) {
     usbKB.releaseAll();
   } else {
     bleKB.release(keycode);

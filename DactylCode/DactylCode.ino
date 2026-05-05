@@ -4,8 +4,8 @@
 //******************************************************************
 
 // board-specific info in a header file. Make sure to change this!
-#include "config/BoardConfig_L.h"
-// #include "config/BoardConfig_R.h"
+// #include "config/BoardConfig_L.h"
+#include "config/BoardConfig_R.h"
 
 #include "RuntimeState.h"
 #include "MatrixScanner.h"
@@ -94,6 +94,12 @@ void setup() {
   MatrixScanner::release_sleep_matrix_config(boardConfig);
 
   initialize_debug_serial();
+
+  // Initialise USB HID early — on ESP32-S3 the device is physically connected
+  // as soon as the board powers on. If we delay USB.begin() the host may time
+  // out on enumeration.
+  HidDispatcher::begin_usb();
+
   MatrixScanner::configure_pins(boardConfig);
   StatusLed::begin(boardConfig, runtimeState.led);
   PowerManager::begin(boardConfig, runtimeState.battery);
@@ -176,7 +182,9 @@ void dispatch_keymap_result(const KeymapResolver::Result& result) {
 }
 
 void dispatch_keymap_action(const KeymapResolver::Action& action) {
-  bool use_local_hid = boardConfig.isPrimary || (!linkState.allowGatt && linkState.connectionType == ConnectionType::None);
+  bool use_local_hid = boardConfig.isPrimary
+                       || linkState.connectionType == ConnectionType::USB
+                       || (!linkState.allowGatt && linkState.connectionType == ConnectionType::None);
 
   switch (action.type) {
     case KeymapResolver::ActionType::None:

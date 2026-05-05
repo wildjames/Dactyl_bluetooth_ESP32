@@ -132,11 +132,9 @@ class GattClientCallbacks : public NimBLEClientCallbacks {
   }
 };
 
-// Call once during setup() when use_gatt && !is_primary.
-// bleKB.begin() must NOT have been called; this function initialises NimBLE
-// directly as a central (no HID advertising).
-// Blocks until the primary half is found and connected (retries indefinitely).
-// Returns true once connected; never returns false.
+// Call when use_gatt && !is_primary to attempt connection to the primary.
+// Performs a single scan burst and connection attempt.
+// Returns true if connected, false otherwise. Caller should retry later.
 inline bool connect_to_primary_gatt() {
   if (!NimBLEDevice::isInitialized()) {
     NimBLEDevice::init("");         // Init BLE without HID
@@ -148,71 +146,69 @@ inline bool connect_to_primary_gatt() {
   pScan->setInterval(30);
   pScan->setWindow(30);
 
-  while (true) {
-    if (boardConfig.debug) { Serial.println("[GATT] Scanning for primary relay service..."); }
+  if (boardConfig.debug) { Serial.println("[GATT] Scanning for primary relay service..."); }
 
-    // Scan in short bursts so we can attempt a connection as soon as the
-    // primary half is discovered instead of waiting for a long scan to finish.
-    pScan->start(GATT_SCAN_BURST_MS, false);
-    while (pScan->isScanning()) { delay(100); }
+  pScan->start(GATT_SCAN_BURST_MS, false);
+  while (pScan->isScanning()) { delay(100); }
 
-    NimBLEScanResults results = pScan->getResults();
+  NimBLEScanResults results = pScan->getResults();
+
+  if (boardConfig.debug) {
+    Serial.print("[GATT] Scan complete, devices found: ");
+    Serial.println(results.getCount());
+  }
+
+  for (int i = 0; i < results.getCount(); i++) {
+    const NimBLEAdvertisedDevice* dev = results.getDevice(i);
+    if (dev->getName() != boardConfig.primaryBleName) {
+      continue;
+    }
 
     if (boardConfig.debug) {
-      Serial.print("[GATT] Scan complete, devices found: ");
-      Serial.println(results.getCount());
+      Serial.print("[GATT] Found primary half: ");
+      Serial.println(dev->getName().c_str());
     }
 
-    for (int i = 0; i < results.getCount(); i++) {
-      const NimBLEAdvertisedDevice* dev = results.getDevice(i);
-      // Match on device name — the 128-bit relay UUID is too large to fit in
-      // the HID advertisement packet so UUID-based filtering is unreliable.
-      if (dev->getName() != boardConfig.primaryBleName) {
-        continue;
-      }
+    NimBLEClient* pClient = NimBLEDevice::createClient();
+    pClient->setClientCallbacks(new GattClientCallbacks(), false);
+    pClient->setConnectionParams(12, 12, 0, 51);
+    pClient->setConnectTimeout(GATT_CONNECT_TIMEOUT_MS);
 
-      if (boardConfig.debug) {
-        Serial.print("[GATT] Found primary half: ");
-        Serial.println(dev->getName().c_str());
-      }
-
-      NimBLEClient* pClient = NimBLEDevice::createClient();
-      pClient->setClientCallbacks(new GattClientCallbacks(), false);
-      pClient->setConnectionParams(12, 12, 0, 51);
-      pClient->setConnectTimeout(GATT_CONNECT_TIMEOUT_MS);
-
-      if (!pClient->connect(dev)) {
-        if (boardConfig.debug) { Serial.println("[GATT] Connection failed; will retry scan"); }
-        NimBLEDevice::deleteClient(pClient);
-        break; // break inner for-loop; outer while retries
-      }
-
-      NimBLERemoteService* pSvc = pClient->getService(RELAY_SERVICE_UUID);
-      if (!pSvc) {
-        if (boardConfig.debug) { Serial.println("[GATT] Relay service not found on primary half; retrying"); }
-        pClient->disconnect();
-        NimBLEDevice::deleteClient(pClient);
-        break;
-      }
-
-      pRemoteKeyChar = pSvc->getCharacteristic(KEY_EVENT_CHAR_UUID);
-      if (!pRemoteKeyChar) {
-        if (boardConfig.debug) { Serial.println("[GATT] Key characteristic not found; retrying"); }
-        pClient->disconnect();
-        NimBLEDevice::deleteClient(pClient);
-        break;
-      }
-
-      gatt_client_ready = true;
-      linkState.connectionType = ConnectionType::Bluetooth;
-      if (boardConfig.debug) { Serial.println("[GATT] Connected to primary relay server"); }
-      return true;
+    if (!pClient->connect(dev)) {
+      if (boardConfig.debug) { Serial.println("[GATT] Connection failed"); }
+      NimBLEDevice::deleteClient(pClient);
+      pScan->clearResults();
+      return false;
     }
 
-    if (boardConfig.debug) { Serial.println("[GATT] Primary half not found, retrying scan..."); }
+    NimBLERemoteService* pSvc = pClient->getService(RELAY_SERVICE_UUID);
+    if (!pSvc) {
+      if (boardConfig.debug) { Serial.println("[GATT] Relay service not found on primary half"); }
+      pClient->disconnect();
+      NimBLEDevice::deleteClient(pClient);
+      pScan->clearResults();
+      return false;
+    }
+
+    pRemoteKeyChar = pSvc->getCharacteristic(KEY_EVENT_CHAR_UUID);
+    if (!pRemoteKeyChar) {
+      if (boardConfig.debug) { Serial.println("[GATT] Key characteristic not found"); }
+      pClient->disconnect();
+      NimBLEDevice::deleteClient(pClient);
+      pScan->clearResults();
+      return false;
+    }
+
+    gatt_client_ready = true;
+    linkState.connectionType = ConnectionType::Bluetooth;
+    if (boardConfig.debug) { Serial.println("[GATT] Connected to primary relay server"); }
     pScan->clearResults();
-    delay(GATT_RETRY_DELAY_MS);
+    return true;
   }
+
+  if (boardConfig.debug) { Serial.println("[GATT] Primary half not found"); }
+  pScan->clearResults();
+  return false;
 }
 
 // ── Send helpers called from the key event dispatch path ─────────────────────

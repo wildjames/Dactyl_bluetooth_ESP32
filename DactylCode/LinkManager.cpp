@@ -29,7 +29,10 @@ namespace LinkManager {
 // Throughout all this, the primary should _always_ be advertising the GATT server, waiting for a possible secondary or maintaining an existing secondary.
 void check_if_usb_connected(LinkState& state) {
 
-  if (tud_connected() && state.connectionType != ConnectionType::USB) {
+  // Use tud_ready() rather than tud_connected() — on boards without VBUS
+  // sensing, tud_connected() stays true after physical unplug. tud_ready()
+  // goes false once SOF packets stop (host is gone).
+  if (tud_ready() && state.connectionType != ConnectionType::USB) {
     // USB just connected
     if (boardConfig.debug) {
       Serial.println("Connected to USB host — switching to USB HID");
@@ -38,7 +41,7 @@ void check_if_usb_connected(LinkState& state) {
     state.connectionType = ConnectionType::USB;
 
     if (state.allowGatt) {
-      if (!boardConfig.isPrimary) {
+      if (boardConfig.isPrimary) {
         // Primary: keep the NimBLE server and GATT advertising alive so the
         // secondary can still connect/relay keystrokes. Only the BLE HID host
         // connection is superseded by USB — the relay service stays up.
@@ -51,6 +54,7 @@ void check_if_usb_connected(LinkState& state) {
         std::vector<NimBLEClient*> clients = NimBLEDevice::getConnectedClients();
         for (NimBLEClient* pClient : clients) {
           pClient->disconnect();
+          NimBLEDevice::deleteClient(pClient);
         }
         if (boardConfig.debug) {
           Serial.println("BLE client disconnected (USB active)");
@@ -58,7 +62,7 @@ void check_if_usb_connected(LinkState& state) {
       }
     }
 
-  } else if (!tud_connected() && state.connectionType == ConnectionType::USB) {
+  } else if (!tud_ready() && state.connectionType == ConnectionType::USB) {
     // Not connected to USB, but was previously - it was unplugged.
     state.connectionType = ConnectionType::None;
 
