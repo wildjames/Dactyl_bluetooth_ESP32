@@ -107,7 +107,7 @@ void update_battery_level(const BoardConfig& config, const LinkState& linkState,
                              ? 0xFF
                              : (uint8_t)batteryState.companionPercentage;
     update_battery_scan_response(primaryPct, companionPct);
-  } else if (linkState.isConnected) {
+  } else if (linkState.connectionType == ConnectionType::Bluetooth) {
     gatt_send_battery_level((uint8_t)battery_percentage);
   }
 
