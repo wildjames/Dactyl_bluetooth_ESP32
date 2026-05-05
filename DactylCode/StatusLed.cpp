@@ -7,32 +7,38 @@ void begin(const BoardConfig& config, LedState& ledState) {
   ledState.dutyCycle = config.led.maxDutyCycle;
 }
 
-void show_connected(const BoardConfig& config, LedState& ledState, const KeymapResolver::KeyboardState& keyboardState) {
-  ledState.outputState = HIGH;
-  if (keyboardState.lockedModKey) {
-    if (millis() - ledState.lastFlashToggle >= 125) {
-      ledState.flashHigh = !ledState.flashHigh;
-      ledState.lastFlashToggle = millis();
-    }
+void update(const BoardConfig& config, LedState& ledState) {
+  switch (ledState.mode) {
+    case LedMode::Off:
+      ledState.outputState = LOW;
+      ledState.dutyCycle = 0;
+      break;
 
-    ledState.dutyCycle = ledState.flashHigh
-      ? config.led.maxDutyCycle
-      : config.led.maxDutyCycle / 2;
-  } else {
-    ledState.dutyCycle = config.led.maxDutyCycle / 2;
+    case LedMode::Disconnected:
+      if (millis() - ledState.lastFlashToggle >= (unsigned long)config.timings.disconnectedWaitMs) {
+        ledState.outputState = ledState.outputState == HIGH ? LOW : HIGH;
+        ledState.lastFlashToggle = millis();
+      }
+      ledState.dutyCycle = config.led.maxDutyCycle;
+      break;
+
+    case LedMode::Connected:
+      ledState.outputState = HIGH;
+      ledState.dutyCycle = config.led.maxDutyCycle / 2;
+      break;
+
+    case LedMode::ConnectedModLocked:
+      ledState.outputState = HIGH;
+      if (millis() - ledState.lastFlashToggle >= 125) {
+        ledState.flashHigh = !ledState.flashHigh;
+        ledState.lastFlashToggle = millis();
+      }
+      ledState.dutyCycle = ledState.flashHigh
+        ? config.led.maxDutyCycle
+        : config.led.maxDutyCycle / 2;
+      break;
   }
 
-  ledcWrite(config.led.pin, ledState.outputState * ledState.dutyCycle);
-}
-
-void show_disconnected(const BoardConfig& config, LedState& ledState) {
-  ledState.outputState = ledState.outputState == HIGH ? LOW : HIGH;
-  ledcWrite(config.led.pin, ledState.outputState * config.led.maxDutyCycle);
-}
-
-void turn_off(const BoardConfig& config, LedState& ledState) {
-  ledState.outputState = LOW;
-  ledState.dutyCycle = 0;
   ledcWrite(config.led.pin, ledState.outputState * ledState.dutyCycle);
 }
 

@@ -119,7 +119,8 @@ void enter_deep_sleep(const BoardConfig& config, LedState& ledState) {
 
   bleKB.beforeSleep();
 
-  StatusLed::turn_off(config, ledState);
+  ledState.mode = LedMode::Off;
+  StatusLed::update(config, ledState);
 
   esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_TIMER);
 

@@ -69,12 +69,18 @@ void initialize_runtime_timers() {
 }
 
 bool keyboard_is_active(bool primary_has_ble_peer) {
+  // Wired, then always active
+  if (linkState.connectionType == ConnectionType::USB) {
+    return true;
+  }
+
+  // Otherwise, check that the pimary/secondary link is up and report accordingly
   bool is_wireless_secondary = linkState.allowGatt && !boardConfig.isPrimary;
   bool has_primary_ble_link = HidDispatcher::has_host_connection();
   bool can_primary_send_keys = has_primary_ble_link || primary_has_ble_peer;
 
-  return is_wireless_secondary ? linkState.isConnected
-                               : (can_primary_send_keys || linkState.isConnected);
+  return is_wireless_secondary ? (linkState.connectionType != ConnectionType::None)
+                               : can_primary_send_keys;
 }
 
 void sleep_if_idle() {
@@ -97,7 +103,7 @@ void setup() {
 
 
 void loop() {
-  LinkManager::tick(linkState);
+  LinkManager::tick(linkState, runtimeState.led);
   bool primary_has_ble_peer = LinkManager::has_primary_ble_peer();
   bool keyboard_active = keyboard_is_active(primary_has_ble_peer);
 
@@ -115,10 +121,9 @@ void loop() {
     }
 
     KeymapResolver::Result keymapResult = {};
-    KeymapResolver::resolve(runtimeState.matrix, keyboardState, keymapResolverConfig, keymapResult);
+    KeymapResolver::resolve(runtimeState.matrix, keyboardState, keymapResolverConfig, keymapResult, runtimeState.led);
     dispatch_keymap_result(keymapResult);
     LinkManager::poll_incoming(linkState, boardConfig.dummy);
-    StatusLed::show_connected(boardConfig, runtimeState.led, keyboardState);
 
     int remaining_ms = boardConfig.timings.pollTimeMs - (int)(millis() - runtimeState.loop.lastLoop);
     if (remaining_ms > 1) {
@@ -127,7 +132,6 @@ void loop() {
 
   } else {
     if (boardConfig.debug) { Serial.println("Not connected to bluetooth..."); }
-    StatusLed::show_disconnected(boardConfig, runtimeState.led);
     LinkManager::poll_incoming(linkState, boardConfig.dummy);
 
     int remaining_ms = boardConfig.timings.disconnectedWaitMs - (int)(millis() - runtimeState.loop.lastLoop);
@@ -144,6 +148,7 @@ void loop() {
     PowerManager::update_battery_level(boardConfig, linkState, runtimeState.battery);
   }
 
+  StatusLed::update(boardConfig, runtimeState.led);
   sleep_if_idle();
 
   runtimeState.loop.lastLoop = millis();
@@ -157,6 +162,8 @@ void dispatch_keymap_result(const KeymapResolver::Result& result) {
       Serial.print(i+1);
       Serial.print("/");
       Serial.print(result.actionCount);
+      Serial.print(" using connection type ");
+      Serial.print((int)linkState.connectionType);
       Serial.print(": type=");
       Serial.print((int)result.actions[i].type);
       Serial.print(", keyIndex=");
@@ -169,7 +176,7 @@ void dispatch_keymap_result(const KeymapResolver::Result& result) {
 }
 
 void dispatch_keymap_action(const KeymapResolver::Action& action) {
-  bool use_local_hid = boardConfig.isPrimary || (!linkState.allowGatt && !linkState.isConnected);
+  bool use_local_hid = boardConfig.isPrimary || (!linkState.allowGatt && linkState.connectionType == ConnectionType::None);
 
   switch (action.type) {
     case KeymapResolver::ActionType::None:
@@ -179,7 +186,7 @@ void dispatch_keymap_action(const KeymapResolver::Action& action) {
     case KeymapResolver::ActionType::ReleaseAll:
     case KeymapResolver::ActionType::TapCapsLock:
       if (use_local_hid) {
-        HidDispatcher::dispatch_action(action, boardConfig.dummy);
+        HidDispatcher::dispatch_action(action, boardConfig.dummy, linkState.connectionType);
       } else {
         LinkManager::dispatch_remote_action(action, linkState);
       }
@@ -187,7 +194,7 @@ void dispatch_keymap_action(const KeymapResolver::Action& action) {
 
     case KeymapResolver::ActionType::KeyPress:
       if (use_local_hid) {
-        HidDispatcher::dispatch_action(action, boardConfig.dummy);
+        HidDispatcher::dispatch_action(action, boardConfig.dummy, linkState.connectionType);
       } else {
         LinkManager::dispatch_remote_action(action, linkState);
       }
@@ -195,7 +202,7 @@ void dispatch_keymap_action(const KeymapResolver::Action& action) {
 
     case KeymapResolver::ActionType::KeyRelease:
       if (use_local_hid) {
-        HidDispatcher::dispatch_action(action, boardConfig.dummy);
+        HidDispatcher::dispatch_action(action, boardConfig.dummy, linkState.connectionType);
       } else {
         LinkManager::dispatch_remote_action(action, linkState);
       }

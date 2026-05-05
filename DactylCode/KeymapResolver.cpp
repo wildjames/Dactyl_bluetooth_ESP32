@@ -108,10 +108,21 @@ void append_release_for_alternate_layer(int pressedIndex, const MatrixState& mat
 
 }
 
-void resolve(MatrixState& matrixState, KeyboardState& keyboardState, const Config& config, Result& result) {
+void resolve(
+  MatrixState& matrixState,
+  KeyboardState& keyboardState,
+  const Config& config,
+  Result& result,
+  LedState& ledState
+) {
   result.actionCount = 0;
 
   update_modifier_lock(matrixState, keyboardState, config, result);
+
+  if (keyboardState.lockedModKey) {
+    ledState.mode = LedMode::ConnectedModLocked;
+  }
+
   if (handle_layout_toggle(matrixState, keyboardState, config, result)) {
     return;
   }

@@ -4,19 +4,22 @@
 
 #include "BoardConfig.h"
 #include "KeymapResolver.h"
+#include "RuntimeState.h"
 
 namespace HidDispatcher {
 
 void begin();
+void begin_usb();
 bool has_host_connection();
+bool has_usb_connection();
 void set_battery_level(float batteryPercentage);
-void release_all();
-void tap_caps_lock();
-void tap_key(uint16_t keyCode, bool dummy);
-void press_key(uint8_t keycode, bool dummy);
-void release_key(uint8_t keycode, bool dummy);
-void press_passthrough(uint8_t keycode, bool dummy);
-void release_passthrough(uint8_t keycode);
-void dispatch_action(const KeymapResolver::Action& action, bool dummy);
+void release_all(ConnectionType conn);
+void tap_caps_lock(ConnectionType conn);
+void tap_key(uint8_t keyCode, bool dummy, ConnectionType conn);
+void press_key(uint8_t keycode, bool dummy, ConnectionType conn);
+void release_key(uint8_t keycode, bool dummy, ConnectionType conn);
+void press_passthrough(uint8_t keycode, bool dummy, ConnectionType conn);
+void release_passthrough(uint8_t keycode, ConnectionType conn);
+void dispatch_action(const KeymapResolver::Action& action, bool dummy, ConnectionType conn);
 
 }

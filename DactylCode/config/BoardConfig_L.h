@@ -19,6 +19,7 @@ static const int ROW_PINS[] = {14, 15, 12, 16, 18, 8, 17};
 // so we use all columns as wake pins.
 static const int WAKE_PINS[] = {17, 12, 15, 16, 8, 14, 18};
 
+// TODO: This should live in the HidDispatcher. Note it is only referenced there and in powermanager, so HidDispatcher will need a beforeSleep()
 HijelHID_BLEKeyboard bleKB("TwoBrownFoxes", "JWILD", 50);
 
 inline BoardConfig make_board_config() {
@@ -28,7 +29,7 @@ inline BoardConfig make_board_config() {
   config.bleDeviceName = "TwoBrownFoxes";
   config.primaryBleName = "TwoBrownFoxes";
   config.manufacturerName = "JWILD";
-  config.debug = false;
+  config.debug = true;
   config.dummy = false;
   config.isPrimary = true;
   config.colPins = COL_PINS;

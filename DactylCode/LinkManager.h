@@ -8,7 +8,7 @@
 namespace LinkManager {
 
 void begin(LinkState& state);
-void tick(LinkState& state);
+void tick(LinkState& state, LedState& ledState);
 void poll_incoming(LinkState& state, bool dummy);
 bool has_primary_ble_peer();
 bool dispatch_remote_action(const KeymapResolver::Action& action, const LinkState& state);

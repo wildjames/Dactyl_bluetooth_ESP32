@@ -59,12 +59,14 @@ class KeyEventCallbacks : public NimBLECharacteristicCallbacks {
     if (boardConfig.dummy) return;
 
     if (evt == GATT_KEY_PRESS) {
-      HidDispatcher::press_key(b1, boardConfig.dummy);
+      // Because we're the primary, we may be in the situation where the primary is USB connected, but the secondary is sending GATT events
+      // So, we need to use the linkState rather than hardcoding to Bluetooth here
+      HidDispatcher::press_key(b1, boardConfig.dummy, linkState.connectionType);
     } else if (evt == GATT_KEY_RELEASE) {
-      HidDispatcher::release_key(b1, boardConfig.dummy);
+      HidDispatcher::release_key(b1, boardConfig.dummy, linkState.connectionType);
     } else if (evt == GATT_KEY_TAP) {
       uint16_t keyCode = (uint16_t)b1 | ((uint16_t)b2 << 8);
-      HidDispatcher::tap_key(keyCode, boardConfig.dummy);
+      HidDispatcher::tap_key(keyCode, boardConfig.dummy, linkState.connectionType);
     }
   }
 };
@@ -124,7 +126,9 @@ class GattClientCallbacks : public NimBLEClientCallbacks {
     if (boardConfig.debug) { Serial.println("[GATT] Disconnected from primary half"); }
     pRemoteKeyChar     = nullptr;
     gatt_client_ready = false;
-    linkState.isConnected = false;
+    if (linkState.connectionType == ConnectionType::Bluetooth) {
+      linkState.connectionType = ConnectionType::None;
+    }
   }
 };
 
@@ -200,7 +204,7 @@ inline bool connect_to_primary_gatt() {
       }
 
       gatt_client_ready = true;
-      linkState.isConnected = true;
+      linkState.connectionType = ConnectionType::Bluetooth;
       if (boardConfig.debug) { Serial.println("[GATT] Connected to primary relay server"); }
       return true;
     }

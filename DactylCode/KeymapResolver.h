@@ -47,6 +47,6 @@ struct Result {
   int actionCount = 0;
 };
 
-void resolve(MatrixState& matrixState, KeyboardState& keyboardState, const Config& config, Result& result);
+void resolve(MatrixState& matrixState, KeyboardState& keyboardState, const Config& config, Result& result, LedState& ledState);
 
 }

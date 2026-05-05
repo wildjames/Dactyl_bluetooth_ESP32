@@ -10,10 +10,16 @@ struct MatrixState {
   int previousKeyStates[MATRIX_KEY_COUNT] = { 0 };
 };
 
+enum class ConnectionType {
+  Bluetooth,
+  USB,
+  None,
+};
+
 struct LinkState {
   bool allowGatt = false;
-  bool isConnected = false;
   uint8_t lastGattConnectedCount = 0;
+  ConnectionType connectionType = ConnectionType::None;
 };
 
 struct BatteryState {
@@ -39,7 +45,15 @@ struct LoopState {
   unsigned long lastKeypress = 0;
 };
 
+enum class LedMode {
+  Off,
+  Disconnected,
+  Connected,
+  ConnectedModLocked,
+};
+
 struct LedState {
+  LedMode mode = LedMode::Off;
   int outputState = HIGH;
   int dutyCycle = 0;
   unsigned long lastFlashToggle = 0;
