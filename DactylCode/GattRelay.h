@@ -18,8 +18,9 @@
 #include "HidDispatcher.h"
 
 // ── UUIDs ─────────────────────────────────────────────────────────────────────
-#define RELAY_SERVICE_UUID  "4FAFC201-1FB5-459E-8FCC-C5C9C331914B"
-#define KEY_EVENT_CHAR_UUID "BEB5483E-36E1-4688-B7F5-EA07361B26A8"
+#define RELAY_SERVICE_UUID      "4FAFC201-1FB5-459E-8FCC-C5C9C331914B"
+#define KEY_EVENT_CHAR_UUID     "BEB5483E-36E1-4688-B7F5-EA07361B26A8"
+#define ACTIVITY_NOTIFY_CHAR_UUID "BEB5483E-36E1-4688-B7F5-EA07361B26A9"
 
 // ── GATT packet format: [event_type, byte1, (byte2)] ────────────────────────
 //   key press:   GATT_KEY_PRESS,   keycode
@@ -30,6 +31,9 @@
 #define GATT_KEY_RELEASE 0x00
 #define GATT_KEY_TAP   0x02
 #define GATT_BATTERY_LEVEL 0x03
+#define GATT_ACTIVITY_PING 0x04
+
+#define GATT_ACTIVITY_NOTIFY_THROTTLE_MS 1000  // max one notify per second
 
 #define GATT_SCAN_BURST_MS        750   // ms per discovery pass before attempting connect
 #define GATT_RETRY_DELAY_MS       100   // ms between scan retries when nothing is found
@@ -56,6 +60,9 @@ class KeyEventCallbacks : public NimBLECharacteristicCallbacks {
       return;
     }
 
+    // Any key event from the secondary counts as activity on both halves.
+    runtimeState.loop.lastActivity = millis();
+
     if (boardConfig.dummy) return;
 
     if (evt == GATT_KEY_PRESS) {
@@ -77,6 +84,10 @@ class KeyEventCallbacks : public NimBLECharacteristicCallbacks {
 //       intentionally - instead the primary half monitors pairing via bleKB's own
 //       callbacks and the secondary half sets is_connected itself after connecting.
 
+// ── Primary activity notification state ────────────────────────────────────
+static NimBLECharacteristic* pActivityNotifyChar = nullptr;
+static unsigned long lastActivityNotifyMs = 0;
+
 // Call once during setup(), AFTER bleKB.begin(), when use_gatt && is_primary.
 // bleKB.begin() has already initialised the NimBLE stack; we retrieve the
 // existing server and attach the relay service to it.
@@ -97,6 +108,12 @@ inline void setup_gatt_server() {
       NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR
     );
     pChar->setCallbacks(new KeyEventCallbacks());
+
+    // Notify characteristic: primary sends activity pings to keep secondary awake.
+    pActivityNotifyChar = pSvc->createCharacteristic(
+      ACTIVITY_NOTIFY_CHAR_UUID,
+      NIMBLE_PROPERTY::NOTIFY
+    );
 
     // NimBLE 2.x starts services when the server starts; calling
     // NimBLEService::start() here is a no-op and does not register the new
@@ -199,6 +216,16 @@ inline bool connect_to_primary_gatt() {
       return false;
     }
 
+    // Subscribe to activity notifications from the primary so we reset our
+    // sleep timer when the primary half has local keypresses.
+    NimBLERemoteCharacteristic* pActivityChar = pSvc->getCharacteristic(ACTIVITY_NOTIFY_CHAR_UUID);
+    if (pActivityChar && pActivityChar->canNotify()) {
+      pActivityChar->subscribe(true, [](NimBLERemoteCharacteristic*, uint8_t*, size_t, bool) {
+        runtimeState.loop.lastActivity = millis();
+      });
+      if (boardConfig.debug) { Serial.println("[GATT] Subscribed to activity notifications"); }
+    }
+
     gatt_client_ready = true;
     linkState.connectionType = ConnectionType::Bluetooth;
     if (boardConfig.debug) { Serial.println("[GATT] Connected to primary relay server"); }
@@ -237,6 +264,18 @@ inline void gatt_send_battery_level(uint8_t percentage) {
   if (!gatt_client_ready || !pRemoteKeyChar) return;
   uint8_t data[2] = { GATT_BATTERY_LEVEL, percentage };
   pRemoteKeyChar->writeValue(data, 2, false);
+}
+
+// Primary notifies connected secondary that local activity occurred.
+// Throttled to avoid BLE congestion — at most once per GATT_ACTIVITY_NOTIFY_THROTTLE_MS.
+inline void gatt_notify_activity() {
+  if (!pActivityNotifyChar) return;
+  unsigned long now = millis();
+  if (now - lastActivityNotifyMs < GATT_ACTIVITY_NOTIFY_THROTTLE_MS) return;
+  lastActivityNotifyMs = now;
+  uint8_t ping = GATT_ACTIVITY_PING;
+  pActivityNotifyChar->setValue(&ping, 1);
+  pActivityNotifyChar->notify();
 }
 
 // Primary updates the scan response to advertise both battery levels.

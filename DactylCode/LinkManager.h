@@ -12,5 +12,6 @@ void tick(LinkState& state, LedState& ledState);
 void poll_incoming(LinkState& state, bool dummy);
 bool has_primary_ble_peer();
 bool dispatch_remote_action(const KeymapResolver::Action& action, const LinkState& state);
+void notify_activity();
 
 }

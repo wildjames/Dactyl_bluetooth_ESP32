@@ -42,7 +42,7 @@ struct ModifierState {
 
 struct LoopState {
   unsigned long lastLoop = 0;
-  unsigned long lastKeypress = 0;
+  unsigned long lastActivity = 0;  // canonical sleep timer — reset by local OR remote keypresses
 };
 
 enum class LedMode {

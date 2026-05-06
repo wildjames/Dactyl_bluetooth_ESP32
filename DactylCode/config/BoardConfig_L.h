@@ -17,7 +17,7 @@ static const int ROW_PINS[] = {14, 15, 12, 16, 18, 8, 17};
 
 // For waking from deepsleep, all column pins are RTC-capable (GPIO 0-21)
 // so we use all columns as wake pins.
-static const int WAKE_PINS[] = {17, 12, 15, 16, 8, 14, 18};
+static const int WAKE_PINS[] = {11, 10, 9, 5, 6};
 
 // TODO: This should live in the HidDispatcher. Note it is only referenced there and in powermanager, so HidDispatcher will need a beforeSleep()
 HijelHID_BLEKeyboard bleKB("TwoBrownFoxes", "JWILD", 50);

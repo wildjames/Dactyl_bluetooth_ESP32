@@ -192,4 +192,8 @@ bool dispatch_remote_action(const KeymapResolver::Action& action, const LinkStat
   return false;
 }
 
+void notify_activity() {
+  gatt_notify_activity();
+}
+
 }

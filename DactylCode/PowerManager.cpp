@@ -133,7 +133,10 @@ void enter_deep_sleep(const BoardConfig& config, LedState& ledState) {
   MatrixScanner::prepare_wake_pins(config);
 
   esp_sleep_enable_ext1_wakeup(buttonPinMask, ESP_EXT1_WAKEUP_ANY_HIGH);
-  if (config.debug) { Serial.println("Going to sleep..."); }
+  if (config.debug) {
+    Serial.println("Going to sleep...");
+    Serial.flush();
+  }
 
   esp_deep_sleep_start();
 }

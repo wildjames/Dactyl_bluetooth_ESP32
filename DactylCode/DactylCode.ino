@@ -66,6 +66,7 @@ void initialize_runtime_timers() {
   keyboardState.lastShiftTap = now;
   keyboardState.lastKeypress = now;
   runtimeState.loop.lastLoop = now;
+  runtimeState.loop.lastActivity = now;
 }
 
 bool keyboard_is_active(bool primary_has_ble_peer) {
@@ -83,8 +84,23 @@ bool keyboard_is_active(bool primary_has_ble_peer) {
                                : can_primary_send_keys;
 }
 
+bool is_battery_charging() {
+  // If battery monitor reports a positive charge rate, we're charging.
+  if (runtimeState.battery.monitorAvailable && runtimeState.battery.chargeRate > 0.0f) {
+    return true;
+  }
+  // USB connection implies external power.
+  if (linkState.connectionType == ConnectionType::USB) {
+    return true;
+  }
+  return false;
+}
+
 void sleep_if_idle() {
-  if (millis() - keyboardState.lastKeypress > boardConfig.timings.deepSleepWaitMs) {
+  // Never sleep while charging.
+  if (is_battery_charging()) { return; }
+
+  if (millis() - runtimeState.loop.lastActivity > boardConfig.timings.deepSleepWaitMs) {
     PowerManager::enter_deep_sleep(boardConfig, runtimeState.led);
   }
 }
@@ -129,6 +145,15 @@ void loop() {
     KeymapResolver::Result keymapResult = {};
     KeymapResolver::resolve(runtimeState.matrix, keyboardState, keymapResolverConfig, keymapResult, runtimeState.led);
     dispatch_keymap_result(keymapResult);
+
+    // Update the canonical activity timer and notify the other half.
+    if (keymapResult.actionCount > 0) {
+      runtimeState.loop.lastActivity = millis();
+      if (boardConfig.isPrimary) {
+        LinkManager::notify_activity();
+      }
+    }
+
     LinkManager::poll_incoming(linkState, boardConfig.dummy);
 
     int remaining_ms = boardConfig.timings.pollTimeMs - (int)(millis() - runtimeState.loop.lastLoop);
@@ -143,10 +168,6 @@ void loop() {
     int remaining_ms = boardConfig.timings.disconnectedWaitMs - (int)(millis() - runtimeState.loop.lastLoop);
     if (remaining_ms > 1) {
       delay(remaining_ms);
-    }
-
-    if (millis() - keyboardState.lastKeypress > boardConfig.timings.disconnectedDeepSleepMs) {
-      PowerManager::enter_deep_sleep(boardConfig, runtimeState.led);
     }
   }
 
