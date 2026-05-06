@@ -158,7 +158,7 @@ void dispatch_action(const KeymapResolver::Action& action, bool dummy, Connectio
       release_all(conn);
       return;
 
-    case KeymapResolver::ActionType::TapCapsLock:
+    case KeymapResolver::ActionType::KeyTap:
       tap_caps_lock(conn);
       return;
 
