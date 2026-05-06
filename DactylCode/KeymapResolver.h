@@ -9,7 +9,6 @@ namespace KeymapResolver {
 enum class ActionType {
   None,
   ReleaseAll,
-  TapCapsLock,
   KeyPress,
   KeyRelease,
   KeyTap,

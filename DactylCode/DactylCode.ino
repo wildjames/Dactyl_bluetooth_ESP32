@@ -190,24 +190,9 @@ void dispatch_keymap_action(const KeymapResolver::Action& action) {
     case KeymapResolver::ActionType::None:
       return;
 
-    // These actions are local to the board and don't need to be forwarded
     case KeymapResolver::ActionType::ReleaseAll:
-    case KeymapResolver::ActionType::TapCapsLock:
-      if (use_local_hid) {
-        HidDispatcher::dispatch_action(action, boardConfig.dummy, linkState.connectionType);
-      } else {
-        LinkManager::dispatch_remote_action(action, linkState);
-      }
-      return;
-
+    case KeymapResolver::ActionType::KeyTap:
     case KeymapResolver::ActionType::KeyPress:
-      if (use_local_hid) {
-        HidDispatcher::dispatch_action(action, boardConfig.dummy, linkState.connectionType);
-      } else {
-        LinkManager::dispatch_remote_action(action, linkState);
-      }
-      return;
-
     case KeymapResolver::ActionType::KeyRelease:
       if (use_local_hid) {
         HidDispatcher::dispatch_action(action, boardConfig.dummy, linkState.connectionType);

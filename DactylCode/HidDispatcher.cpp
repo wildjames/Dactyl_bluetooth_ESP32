@@ -24,9 +24,14 @@ bool usb_can_send() {
   return usbStarted && tud_ready();
 }
 
+// Decides whether to use USB for this call. On the primary, USB might have
+// been unplugged (tud_ready() == false) and we fall back to BLE. On the
+// secondary, BLE HID is never initialised so we must always use USB when
+// the connection type says USB.
 bool should_use_usb(ConnectionType conn) {
   if (conn != ConnectionType::USB) return false;
-  return usb_can_send();
+  if (boardConfig.isPrimary) return usb_can_send();
+  return usbStarted;  // secondary: always send via USB if started
 }
 
 }

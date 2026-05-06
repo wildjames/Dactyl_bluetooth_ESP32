@@ -185,7 +185,6 @@ bool dispatch_remote_action(const KeymapResolver::Action& action, const LinkStat
 
       case KeymapResolver::ActionType::None:
       case KeymapResolver::ActionType::ReleaseAll:
-      case KeymapResolver::ActionType::TapCapsLock:
         return false;
     }
   }
