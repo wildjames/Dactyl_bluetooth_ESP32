@@ -1,8 +1,7 @@
+#include <HijelHID_BLEKeyboard.h>
+
 // Layers can be accessed by holding the MOD key, index defined below
 int MODKEY0 = 32;
-
-// Double-tap this physical key index to toggle caps lock. Set to -1 to disable.
-int SHIFTKEY0 = 2;
 
 // Can toggle to a gaming-focussed layout with these keys. Made them different keys so that
 // you *know* that no matter what state you were in before, now you're in the new one.

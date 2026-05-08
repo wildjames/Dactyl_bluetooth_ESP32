@@ -78,16 +78,6 @@ void release_all(ConnectionType conn) {
   }
 }
 
-void tap_caps_lock(ConnectionType conn) {
-  if (should_use_usb(conn)) {
-    usbKB.pressRaw((uint8_t)KEY_CAPS_LOCK);
-    delay(25);
-    usbKB.releaseAll();
-  } else {
-    bleKB->tap((uint8_t)KEY_CAPS_LOCK);
-  }
-}
-
 void tap_key(uint8_t keyCode, bool dummy, ConnectionType conn) {
   if (dummy) {
     return;
@@ -134,26 +124,6 @@ void release_key(uint8_t keycode, bool dummy, ConnectionType conn) {
   }
 }
 
-void press_passthrough(uint8_t keycode, bool dummy, ConnectionType conn) {
-  if (dummy) {
-    return;
-  }
-
-  if (should_use_usb(conn)) {
-    usbKB.pressRaw(keycode);
-  } else {
-    bleKB->press(keycode);
-  }
-}
-
-void release_passthrough(uint8_t keycode, ConnectionType conn) {
-  if (should_use_usb(conn)) {
-    usbKB.releaseAll();
-  } else {
-    bleKB->release(keycode);
-  }
-}
-
 void dispatch_action(const KeymapResolver::Action& action, bool dummy, ConnectionType conn) {
   switch (action.type) {
     case KeymapResolver::ActionType::None:
@@ -164,7 +134,7 @@ void dispatch_action(const KeymapResolver::Action& action, bool dummy, Connectio
       return;
 
     case KeymapResolver::ActionType::KeyTap:
-      tap_caps_lock(conn);
+      tap_key(action.keycode, dummy, conn);
       return;
 
     case KeymapResolver::ActionType::KeyPress:

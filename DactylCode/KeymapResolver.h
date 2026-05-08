@@ -1,5 +1,8 @@
 #pragma once
 
+// I don't like to include this here, but I need it to be able to know that I'm using the same shift key codes as the keymap itself.
+#include <HijelHID_BLEKeyboard.h>
+
 #include <Arduino.h>
 
 #include "RuntimeState.h"
@@ -30,7 +33,6 @@ struct Action {
 
 struct Config {
   int modifierKeyIndex = -1;
-  int shiftKeyIndex = -1;
   int altToggleKeyIndex = -1;
   int typingToggleKeyIndex = -1;
   int doubleTapIntervalMs = 0;

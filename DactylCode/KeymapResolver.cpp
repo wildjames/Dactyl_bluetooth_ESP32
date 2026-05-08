@@ -43,16 +43,23 @@ void update_modifier_lock(MatrixState& matrixState, KeyboardState& keyboardState
     }
   }
 
-  if (config.shiftKeyIndex >= 0
-      && matrixState.previousKeyStates[config.shiftKeyIndex]
-      && !matrixState.keyStates[config.shiftKeyIndex]) {
-    unsigned long shiftTapSeparationMs = millis() - keyboardState.lastShiftTap;
-    if (shiftTapSeparationMs >= (unsigned long)config.doubleTapMinIntervalMs
-        && shiftTapSeparationMs < (unsigned long)config.doubleTapIntervalMs) {
-      push_action(result, config.shiftKeyIndex, ActionType::KeyTap, 0x39); // Caps Lock
-      keyboardState.lastShiftTap -= config.doubleTapIntervalMs;
-    } else {
-      keyboardState.lastShiftTap = millis();
+  // Detect double-tap on any key mapped to shift (KEY_LSHIFT or KEY_RSHIFT)
+  for (int i = 0; i < MATRIX_KEY_COUNT; i++) {
+    if (matrixState.previousKeyStates[i] && !matrixState.keyStates[i]) {
+      if (i < config.primaryKeymapLength) {
+        int keyCode = config.primaryKeymap[i];
+        if (keyCode == KEY_LSHIFT || keyCode == KEY_RSHIFT) {
+          unsigned long shiftTapSeparationMs = millis() - keyboardState.lastShiftTap;
+          if (shiftTapSeparationMs >= (unsigned long)config.doubleTapMinIntervalMs
+              && shiftTapSeparationMs < (unsigned long)config.doubleTapIntervalMs) {
+            push_action(result, i, ActionType::KeyTap, 0x39); // Caps Lock
+            keyboardState.lastShiftTap -= config.doubleTapIntervalMs;
+          } else {
+            keyboardState.lastShiftTap = millis();
+          }
+          break; // Only handle one shift release per scan
+        }
+      }
     }
   }
 }
