@@ -6,8 +6,10 @@ int MODKEY0 = 32;
 // Can toggle to a gaming-focussed layout with these keys. Made them different keys so that
 // you *know* that no matter what state you were in before, now you're in the new one.
 // If this is negative, toggling is disabled.
-int alt_toggle = -1;
-int typing_toggle = -1;
+// MOD + key at this index -> switch to gaming layout
+int typing_toggle = 23;  // KEY_V
+// MOD + key at this index -> switch to typing layout
+int alt_toggle = 28;    // KEY_B
 
 int keymap[] = {
   // Keymap values are HID keycodes directly.
@@ -35,4 +37,15 @@ int keymap[] = {
 };
 
 
-int alt_keymap[] = {};
+int alt_keymap[] = {
+  // Gaming Layer 0, shifts all keys over by 1 column
+  -1,            -1,         -1,          -1,           KEY_LEFTBRACE,
+  KEY_ESCAPE,    KEY_TAB,    KEY_LSHIFT,  KEY_LCTRL,    KEY_RIGHTBRACE,
+  KEY_1,         KEY_Q,      KEY_A,       KEY_Z,        KEY_LGUI,
+  KEY_2,         KEY_W,      KEY_S,       KEY_X,        KEY_LALT,
+  KEY_3,         KEY_E,      KEY_D,       KEY_C,        -1,
+  KEY_4,         KEY_R,      KEY_F,       KEY_V,        -1,
+  KEY_HOME,      KEY_RETURN, KEY_G,       KEY_SPACE,    -1,
+};
+
+

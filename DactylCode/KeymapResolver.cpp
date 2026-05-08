@@ -65,17 +65,25 @@ void update_modifier_lock(MatrixState& matrixState, KeyboardState& keyboardState
 }
 
 bool handle_layout_toggle(MatrixState& matrixState, KeyboardState& keyboardState, const Config& config, Result& result) {
-  if (keyboardState.isAltLayout) {
-    if (config.typingToggleKeyIndex >= 0 && matrixState.keyStates[config.typingToggleKeyIndex]) {
-      keyboardState.isAltLayout = false;
-      matrixState.previousKeyStates[config.typingToggleKeyIndex] = 1;
-      push_action(result, config.typingToggleKeyIndex, ActionType::ReleaseAll);
-      return true;
-    }
+  // Layout toggle requires MOD to be held
+  if (config.modifierKeyIndex < 0 || !matrixState.keyStates[config.modifierKeyIndex]) {
     return false;
   }
 
-  if (config.altToggleKeyIndex >= 0 && matrixState.keyStates[config.altToggleKeyIndex]) {
+  // MOD + typing toggle -> always switch to primary (typing) layout
+  if (config.typingToggleKeyIndex >= 0
+      && matrixState.keyStates[config.typingToggleKeyIndex]
+      && !matrixState.previousKeyStates[config.typingToggleKeyIndex]) {
+    keyboardState.isAltLayout = false;
+    push_action(result, config.typingToggleKeyIndex, ActionType::ReleaseAll);
+    return true;
+  }
+
+  // MOD + alt toggle -> always switch to alternate (gaming) layout
+  if (config.altToggleKeyIndex >= 0
+      && matrixState.keyStates[config.altToggleKeyIndex]
+      && !matrixState.previousKeyStates[config.altToggleKeyIndex]
+      && config.alternateKeymapLength > 0) {
     keyboardState.isAltLayout = true;
     push_action(result, config.altToggleKeyIndex, ActionType::ReleaseAll);
     return true;
