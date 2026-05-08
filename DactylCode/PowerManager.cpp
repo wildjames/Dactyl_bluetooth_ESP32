@@ -117,7 +117,7 @@ void update_battery_level(const BoardConfig& config, const LinkState& linkState,
 void enter_deep_sleep(const BoardConfig& config, LedState& ledState) {
   if (config.debug) { Serial.println("Entering deep sleep!"); }
 
-  bleKB.beforeSleep();
+  HidDispatcher::before_sleep();
 
   ledState.mode = LedMode::Off;
   StatusLed::update(config, ledState);

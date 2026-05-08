@@ -1,8 +1,9 @@
-// HidDispatcher.h pulls in HijelHID_BLEKeyboard.h which #defines
-// HID_REPORT_ID_KEYBOARD as a numeric constant. The ESP32 USB library's
-// USBHID.h uses the same name as an enum value. We must #undef the macro
-// between the two includes to avoid a conflict.
+// HijelHID_BLEKeyboard.h #defines HID_REPORT_ID_KEYBOARD as a numeric
+// constant. The ESP32 USB library's USBHID.h uses the same name as an enum
+// value. We must #undef the macro between the two includes to avoid a conflict.
 #include "HidDispatcher.h"
+
+#include <HijelHID_BLEKeyboard.h>
 
 #undef HID_REPORT_ID_KEYBOARD
 #undef HID_REPORT_ID_CONSUMER
@@ -14,6 +15,7 @@
 
 namespace {
 
+HijelHID_BLEKeyboard* bleKB = nullptr;
 USBHIDKeyboard usbKB;
 bool usbStarted = false;
 
@@ -39,7 +41,10 @@ bool should_use_usb(ConnectionType conn) {
 namespace HidDispatcher {
 
 void begin() {
-  bleKB.begin();
+  if (!bleKB) {
+    bleKB = new HijelHID_BLEKeyboard(boardConfig.bleDeviceName, boardConfig.manufacturerName, 50);
+  }
+  bleKB->begin();
 }
 
 void begin_usb() {
@@ -54,7 +59,7 @@ void begin_usb() {
 }
 
 bool has_host_connection() {
-  return bleKB.isConnected() || bleKB.isPaired();
+  return bleKB && (bleKB->isConnected() || bleKB->isPaired());
 }
 
 bool has_usb_connection() {
@@ -62,14 +67,14 @@ bool has_usb_connection() {
 }
 
 void set_battery_level(float batteryPercentage) {
-  bleKB.setBatteryLevel(batteryPercentage);
+  bleKB->setBatteryLevel(batteryPercentage);
 }
 
 void release_all(ConnectionType conn) {
   if (should_use_usb(conn)) {
     usbKB.releaseAll();
   } else {
-    bleKB.releaseAll();
+    bleKB->releaseAll();
   }
 }
 
@@ -79,7 +84,7 @@ void tap_caps_lock(ConnectionType conn) {
     delay(25);
     usbKB.releaseAll();
   } else {
-    bleKB.tap((uint8_t)KEY_CAPS_LOCK);
+    bleKB->tap((uint8_t)KEY_CAPS_LOCK);
   }
 }
 
@@ -93,7 +98,7 @@ void tap_key(uint8_t keyCode, bool dummy, ConnectionType conn) {
     delay(25);
     usbKB.releaseAll();
   } else {
-    bleKB.tap(keyCode);
+    bleKB->tap(keyCode);
   }
 }
 
@@ -113,7 +118,7 @@ void press_key(uint8_t keycode, bool dummy, ConnectionType conn) {
     }
     usbKB.pressRaw(keycode);
   } else {
-    bleKB.press(keycode);
+    bleKB->press(keycode);
   }
 }
 
@@ -125,7 +130,7 @@ void release_key(uint8_t keycode, bool dummy, ConnectionType conn) {
   if (should_use_usb(conn)) {
     usbKB.releaseAll();
   } else {
-    bleKB.release(keycode);
+    bleKB->release(keycode);
   }
 }
 
@@ -137,7 +142,7 @@ void press_passthrough(uint8_t keycode, bool dummy, ConnectionType conn) {
   if (should_use_usb(conn)) {
     usbKB.pressRaw(keycode);
   } else {
-    bleKB.press(keycode);
+    bleKB->press(keycode);
   }
 }
 
@@ -145,7 +150,7 @@ void release_passthrough(uint8_t keycode, ConnectionType conn) {
   if (should_use_usb(conn)) {
     usbKB.releaseAll();
   } else {
-    bleKB.release(keycode);
+    bleKB->release(keycode);
   }
 }
 
@@ -169,6 +174,12 @@ void dispatch_action(const KeymapResolver::Action& action, bool dummy, Connectio
     case KeymapResolver::ActionType::KeyRelease:
       release_key(action.keycode, dummy, conn);
       return;
+  }
+}
+
+void before_sleep() {
+  if (bleKB) {
+    bleKB->beforeSleep();
   }
 }
 

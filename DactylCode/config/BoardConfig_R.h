@@ -24,8 +24,6 @@ static const int ROW_PINS[] = {10, 5, 6, 11, 9};
 // so we use all columns as wake pins.
 static const int WAKE_PINS[] = {17, 12, 15, 16, 8, 14, 18};
 
-HijelHID_BLEKeyboard bleKB("TwoBrownFoxes_R", "JWILD", 50);
-
 inline BoardConfig make_board_config() {
   BoardConfig config = {};
 
@@ -50,7 +48,7 @@ inline BoardConfig make_board_config() {
   config.led.maxDutyCycle = 200;
 
   config.timings.pollTimeMs = 5;
-  config.timings.doubleTapIntervalMs = 1000;
+  config.timings.doubleTapIntervalMs = 500;
   config.timings.doubleTapMinIntervalMs = 100;
   config.timings.disconnectedWaitMs = 500;
   config.timings.disconnectedDeepSleepMs = 1000 * 60 * 2;

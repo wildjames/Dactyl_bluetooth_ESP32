@@ -49,7 +49,7 @@ void update_modifier_lock(MatrixState& matrixState, KeyboardState& keyboardState
     unsigned long shiftTapSeparationMs = millis() - keyboardState.lastShiftTap;
     if (shiftTapSeparationMs >= (unsigned long)config.doubleTapMinIntervalMs
         && shiftTapSeparationMs < (unsigned long)config.doubleTapIntervalMs) {
-      push_action(result, config.shiftKeyIndex, ActionType::KeyTap, KEY_CAPS_LOCK);
+      push_action(result, config.shiftKeyIndex, ActionType::KeyTap, 0x39); // Caps Lock
       keyboardState.lastShiftTap -= config.doubleTapIntervalMs;
     } else {
       keyboardState.lastShiftTap = millis();

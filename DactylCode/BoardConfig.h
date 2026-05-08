@@ -1,7 +1,6 @@
 #pragma once
 
 #include <Arduino.h>
-#include <HijelHID_BLEKeyboard.h>
 
 constexpr int MATRIX_KEY_COUNT = 35;
 
@@ -47,4 +46,3 @@ struct BoardConfig {
 };
 
 extern const BoardConfig boardConfig;
-extern HijelHID_BLEKeyboard bleKB;

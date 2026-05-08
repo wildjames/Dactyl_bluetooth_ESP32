@@ -21,5 +21,6 @@ void release_key(uint8_t keycode, bool dummy, ConnectionType conn);
 void press_passthrough(uint8_t keycode, bool dummy, ConnectionType conn);
 void release_passthrough(uint8_t keycode, ConnectionType conn);
 void dispatch_action(const KeymapResolver::Action& action, bool dummy, ConnectionType conn);
+void before_sleep();
 
 }
