@@ -153,6 +153,9 @@ void tick(LinkState& state, LedState& ledState) {
     secondary_tick(state);
   }
 
+  // FIXME: I think that this is not the right way to set the LED stat for link state.
+  // This updates the LED state every tick, which is a) wasteful and b) would overwrite
+  // other LED state changes
   if (state.connectionType != ConnectionType::None) {
     ledState.mode = LedMode::Connected;
   } else {

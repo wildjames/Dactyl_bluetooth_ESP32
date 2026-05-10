@@ -1,5 +1,13 @@
 #include "StatusLed.h"
 
+// FIXME: Perhaps I was wrong about not having any decision making logic here.
+// Since the rest of the code happens in a defined sequence, there could be situations
+// where an LED state change needs to be made, but that is overridden by a later part of
+// the code despite that later LED state being lower priority.
+// Perhaps instead of a single LED state, I could have a byte of flags that represent
+// desired LED conditions, then I could do a switch statement based on that?
+// Just a thought.
+
 namespace StatusLed {
 
 void begin(const BoardConfig& config, LedState& ledState) {
