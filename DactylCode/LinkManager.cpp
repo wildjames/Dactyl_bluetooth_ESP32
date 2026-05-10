@@ -99,10 +99,13 @@ void begin(LinkState& state) {
     if (boardConfig.isPrimary) {
       // Attach relay service to the server that bleKB already owns.
       setup_gatt_server();
+      state.connectionType = ConnectionType::Bluetooth;
     } else {
+      // connect_to_primary_gatt() sets connectionType = Bluetooth on success.
+      // If it fails (e.g. primary is still asleep), leave as None so
+      // secondary_tick() retries the connection.
       connect_to_primary_gatt();
     }
-    state.connectionType = ConnectionType::Bluetooth;
 
   } else {
     check_if_usb_connected(state);
