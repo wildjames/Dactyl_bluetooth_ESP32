@@ -61,6 +61,9 @@ To switch between compiling for the left or right half, comment/uncomment the re
 // #include "config/BoardConfig_R.h"
 ```
 
+I think, personally, that some areas of the code are starting to be sophisticated and complicated enough that I need to have some explicit docs about them, so when I inevitably find a weird behaviour in 4 months, I have some idea of where to look. I'll keep that stuff [here](DactylCode/README.md)
+
+
 ## Tailoring the code for yourself
 
 Each half has its own config file under `config/` — `BoardConfig_L.h` and `BoardConfig_R.h`. These contain all the user-editable stuff you should need: pin assignments, timing parameters, LED config, battery thresholds, and whether the half is primary or secondary. I hope most of it is self-explanatory.
