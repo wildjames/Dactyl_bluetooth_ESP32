@@ -106,12 +106,11 @@ void append_release_for_alternate_layer(int pressedIndex, const MatrixState& mat
     return;
   }
 
-  // TODO: Refactor this alongside the tap handling in resolve()
-  // if (alternateKeyCode < -1) {
-  //   alternateKeyCode *= -1;
-  //   push_action(result, alternateIndex, ActionType::KeyRelease, 0);
-  //   return;
-  // }
+  if (alternateKeyCode < -1) {
+    // tapped key - but release anyway
+    push_action(result, pressedIndex, ActionType::KeyRelease, (uint8_t)(-alternateKeyCode));
+    return;
+  }
 
   push_action(
     result,
@@ -166,14 +165,11 @@ void resolve(
         continue;
       }
 
-      // TODO
-      // I need to think about how to define that a key should be tapped instead of pressed.
-      // The negative index worked for a separate array of media keys, but it's not the right solution anymore.
-      // if (keyCode < -1) {
-      //   keyCode *= -1;
-      //   push_action(result, pressedIndex, ActionType::KeyTap, 0);
-      //   continue;
-      // }
+      if (keyCode < -1) {
+        push_action(result, pressedIndex, ActionType::KeyTap, (uint8_t)(-keyCode));
+        keyboardState.lastKeypress = millis();
+        continue;
+      }
 
       keyboardState.lastKeypress = millis();
       push_action(
@@ -199,7 +195,7 @@ void resolve(
         result,
         pressedIndex,
         ActionType::KeyRelease,
-        (uint8_t)keyCode
+        keyCode < -1 ? (uint8_t)(-keyCode) : (uint8_t)keyCode
       );
       if (config.modifierKeyIndex >= 0) {
         append_release_for_alternate_layer(pressedIndex, matrixState, keyboardState, config, activeKeymap, keymapLength, result);
