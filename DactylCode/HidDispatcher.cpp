@@ -86,7 +86,7 @@ void tap_key(uint8_t keyCode, bool dummy, ConnectionType conn) {
   if (should_use_usb(conn)) {
     usbKB.pressRaw(keyCode);
     delay(25);
-    usbKB.releaseAll();
+    usbKB.releaseRaw(keyCode);
   } else {
     bleKB->tap(keyCode);
   }
@@ -118,7 +118,7 @@ void release_key(uint8_t keycode, bool dummy, ConnectionType conn) {
   }
 
   if (should_use_usb(conn)) {
-    usbKB.releaseAll();
+    usbKB.releaseRaw(keycode);
   } else {
     bleKB->release(keycode);
   }
